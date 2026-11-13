@@ -197,9 +197,11 @@ a.link{font-size:13px;color:var(--accent);text-decoration:none;font-weight:600;m
 const SPORTS = [
   {id:"lauf", name:"Laufen", ic:"🏃"},
   {id:"rad", name:"Radfahren", ic:"🚴"},
+  {id:"gravel", name:"Gravel / Bikepacking", ic:"🚵"},
   {id:"tri", name:"Triathlon", ic:"🏅"},
   {id:"schwimm", name:"Schwimmen", ic:"🏊"},
   {id:"trail", name:"Trail / Berg", ic:"⛰️"},
+  {id:"wandern", name:"Wandern", ic:"🥾"},
   {id:"sonst", name:"Sonstiges", ic:"🎽"}
 ];
 const STATUS = {
@@ -288,11 +290,26 @@ const PACK_DEFAULT = {
   tri:["Neoprenanzug","Schwimmbrille","Badekappe","Fahrrad","Helm","Radschuhe","Laufschuhe","Trisuit","Handtuch für die Wechselzone"],
   schwimm:["Badehose","Schwimmbrille","Badekappe","Neoprenanzug","Badelatschen"],
   trail:["Trailschuhe","Laufweste / Rucksack","Pflichtausrüstung","Stirnlampe","Stöcke","Rettungsdecke"],
+  gravel:["Gravelbike","Helm","Radschuhe","Rahmentasche","Satteltasche","Lenkerrolle","Oberrohrtasche","Trinkflaschen",
+    "GPS-Gerät / Navi","Powerbank + Kabel","Front- und Rücklicht","Ersatzschlauch / Tubeless-Flickzeug","Minipumpe / CO2",
+    "Multitool + Kettennieter","Kettenschloss","Kettenöl","Reifenheber","Kabelbinder + Klebeband","Radhose (2×)","Trikot (2×)",
+    "Arm- und Beinlinge","Windweste","Regenjacke","Warme Schicht für abends","Schlafsack","Isomatte","Biwaksack / Zelt",
+    "Stirnlampe","Sitzcreme","Erste-Hilfe-Set","Riegel / Verpflegung","Wasserfilter","Zahnbürste + Kulturbeutel"],
+  wandern:["Wanderschuhe","Wandersocken","Rucksack","Regenjacke","Fleece / Midlayer","Funktionsshirt","Wanderhose","Mütze / Cap",
+    "Wanderstöcke","Karte / Navi-App","Trinkflasche / Trinkblase","Proviant","Erste-Hilfe-Set","Blasenpflaster","Taschenmesser",
+    "Stirnlampe","Sonnenbrille","Rettungsdecke"],
   sonst:[]
 };
 const PACK = {
   tpl:null,
-  load(){ try{ const r = localStorage.getItem(PACK_KEY); this.tpl = r ? JSON.parse(r) : null; }catch{} if(!this.tpl) this.tpl = JSON.parse(JSON.stringify(PACK_DEFAULT)); },
+  load(){
+    try{ const r = localStorage.getItem(PACK_KEY); this.tpl = r ? JSON.parse(r) : null; }catch{}
+    if(!this.tpl) this.tpl = JSON.parse(JSON.stringify(PACK_DEFAULT));
+    // neue Sportarten aus Updates ergänzen, ohne eigene Änderungen anzutasten
+    let changed = false;
+    for(const k of Object.keys(PACK_DEFAULT)){ if(!this.tpl[k]){ this.tpl[k] = [...PACK_DEFAULT[k]]; changed = true; } }
+    if(changed) this.save();
+  },
   save(){ try{ localStorage.setItem(PACK_KEY, JSON.stringify(this.tpl)); }catch{} }
 };
 PACK.load();
@@ -307,6 +324,11 @@ const toSec = t => { if(!t) return null; const p = String(t).trim().split(/[:.,]
   return p.length===3 ? p[0]*3600+p[1]*60+p[2] : p[0]*60+p[1]; };
 const fmtSec = sec => { const h = Math.floor(sec/3600), m = Math.floor(sec%3600/60), x = sec%60; return h ? h+":"+pad(m)+":"+pad(x) : m+":"+pad(x); };
 const hasResult = e => e.result && (e.result.time || e.result.place);
+const endOf = e => e.endDate && e.endDate > e.date ? e.endDate : e.date;
+const isMulti = e => endOf(e) !== e.date;
+const dayCount = e => Math.round((parse(endOf(e)) - parse(e.date)) / 86400000) + 1;
+const fmtRange = e => { if(!isMulti(e)) return fmtShort(e.date); const a = parse(e.date), b = parse(endOf(e));
+  return a.getMonth()===b.getMonth() ? a.getDate()+".–"+b.getDate()+". "+MON_SHORT[b.getMonth()] : fmtShort(e.date)+" – "+fmtShort(endOf(e)); };
 
 /* ---------- Deutsche Feiertage ---------- */
 const STATES = [["","Nur bundesweite Feiertage"],["BW","Baden-Württemberg"],["BY","Bayern"],["BE","Berlin"],["BB","Brandenburg"],
@@ -369,7 +391,8 @@ function getNotices(){
     if(e.status==="reg" && e.fee>0 && !e.paid && n>=0){
       out.push({e, sort:n+0.3, ic:"💶", html:`Startgeld für <b>${esc(e.title)}</b> (${eur(e.fee)}) ist noch offen.`});
     }
-    if(e.status!=="done" && e.status==="reg" && n<0 && n>=-14){
+    const ne = daysUntil(endOf(e));
+    if(e.status==="reg" && ne<0 && ne>=-14){
       out.push({e, sort:500, ic:"⏱", html:`Wie lief <b>${esc(e.title)}</b>? Trag dein Ergebnis ein.`});
     }
     if(n>=0 && n<=3 && e.status==="reg"){
@@ -382,12 +405,12 @@ function getNotices(){
 
 /* ---------- Darstellung: Eintragskarte ---------- */
 function cardHTML(e){
-  const d = parse(e.date), n = daysUntil(e.date), s = sportOf(e.sport), st = STATUS[e.status]||STATUS.watch;
+  const d = parse(e.date), n = daysUntil(e.date), ne = daysUntil(endOf(e)), s = sportOf(e.sport), st = STATUS[e.status]||STATUS.watch;
   const url = safeUrl(e.url);
   const hol = holidayOf(e.date);
-  const meta = [e.time ? e.time+" Uhr" : "", e.location, e.distance, hol ? "🎉 "+hol : ""].filter(Boolean).map(esc).join(" · ");
+  const meta = [isMulti(e) ? fmtRange(e)+" ("+dayCount(e)+" Tage)" : "", e.time ? e.time+" Uhr" : "", e.location, e.distance, hol ? "🎉 "+hol : ""].filter(Boolean).map(esc).join(" · ");
   return `<div class="card" data-id="${esc(e.id)}">
-    <div class="date ${n<0?"past":""}"><div class="d">${d.getDate()}</div><div class="m">${MON_SHORT[d.getMonth()]}</div></div>
+    <div class="date ${ne<0?"past":""}"><div class="d">${d.getDate()}</div><div class="m">${MON_SHORT[d.getMonth()]}</div></div>
     <div class="body">
       <div class="title">${s.ic} ${esc(e.title)}</div>
       <div class="meta">${meta || esc(s.name)}</div>
@@ -395,7 +418,7 @@ function cardHTML(e){
         <span class="pill ${st.cls}">${st.name}</span>
         ${e.result && e.result.time ? `<span class="pill res">⏱ ${esc(e.result.time)}</span>` : ""}
         ${e.fee>0 && !e.paid && e.status==="reg" ? `<span class="pill fee">💶 offen</span>` : ""}
-        ${n>=0 ? `<span class="pill count">${relDays(n)}</span>` : ""}
+        ${n>=0 ? `<span class="pill count">${relDays(n)}</span>` : ne>=0 ? `<span class="pill count">läuft – Tag ${1-n} von ${dayCount(e)}</span>` : ""}
         ${url ? `<a class="link" href="${esc(url)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">Zur Website ↗</a>` : ""}
       </div>
     </div>
@@ -423,8 +446,8 @@ const MODULES = [
     render(root){
       const all = sorted();
       const notices = getNotices();
-      const upcoming = filtered(all.filter(e=>daysUntil(e.date)>=0));
-      const past = filtered(all.filter(e=>daysUntil(e.date)<0)).reverse();
+      const upcoming = filtered(all.filter(e=>daysUntil(endOf(e))>=0));
+      const past = filtered(all.filter(e=>daysUntil(endOf(e))<0)).reverse();
       if(!all.length){
         root.innerHTML = `<div class="empty"><div class="big">🏃</div><p><b>Noch keine Veranstaltungen.</b></p>
           <p>Tippe auf <b>+</b>, um deine erste Veranstaltung einzutragen.</p></div>`;
@@ -447,7 +470,10 @@ const MODULES = [
       const offset = (first.getDay()+6)%7;
       const start = new Date(y, mo, 1-offset);
       const byDay = {};
-      for(const e of STORE.events){ (byDay[e.date] ||= []).push(e); }
+      for(const e of STORE.events){
+        const end = parse(endOf(e));
+        for(let d = parse(e.date), i = 0; d <= end && i < 60; d.setDate(d.getDate()+1), i++) (byDay[ymd(d)] ||= []).push(e);
+      }
       const t = todayStr();
       let cells = "";
       for(let i=0;i<42;i++){
@@ -458,7 +484,7 @@ const MODULES = [
         cells += `<button class="${cls}" data-day="${k}" ${hol?`title="${esc(hol)}"`:""}>${d.getDate()}
           <span class="dots">${evs.slice(0,3).map(e=>`<span class="dot ${(STATUS[e.status]||STATUS.watch).cls}"></span>`).join("")}</span></button>`;
       }
-      const dayEvents = sorted().filter(e=>e.date===UI.calSel);
+      const dayEvents = sorted().filter(e=>e.date<=UI.calSel && endOf(e)>=UI.calSel);
       const monthHol = Object.entries(holidays(y)).filter(([d])=>+d.slice(5,7)===mo+1).sort();
       const selHol = holidayOf(UI.calSel);
       root.innerHTML = `
@@ -568,6 +594,11 @@ const MODULES = [
           <p>📲 <b>Als echte iPhone-Mitteilung:</b> Öffne eine Veranstaltung und tippe auf „In iPhone-Kalender übernehmen“, dann auf „Hinzufügen“. Deine Erinnerung ist schon eingestellt – das iPhone meldet sich zuverlässig, auch wenn die App geschlossen ist.</p>
           <div class="actions"><button class="btn small" id="exportAll" ${n?"":"disabled"}>Alle kommenden in Kalender exportieren</button></div>
         </div>
+        <h2>Neuigkeiten</h2>
+        <div class="info">
+          <p>✨ Was hat sich in den letzten Updates geändert?</p>
+          <div class="actions"><button class="btn small" id="whatsNew">Was ist neu</button></div>
+        </div>
         <h2>Feiertage</h2>
         <div class="info">
           <p>🎉 Feiertage werden im Kalender rot markiert. Wähle dein Bundesland für die regionalen Feiertage:</p>
@@ -599,9 +630,9 @@ const MODULES = [
           <label class="field" style="margin:8px 0"><textarea id="importText" placeholder="[ { … } ]"></textarea></label>
           <div class="actions"><button class="btn small" id="importBtn">Importieren</button></div>
         </div>
-        <div class="syncnote">Mein Sportticker · Version 4</div>`;
+        <div class="syncnote">Mein Sportticker · Version ${APP_VERSION}</div>`;
       const ex = $("#exportAll"); if(ex) ex.onclick = () => {
-        const list = STORE.events.filter(e=>daysUntil(e.date)>=0 && e.status!=="done");
+        const list = STORE.events.filter(e=>daysUntil(endOf(e))>=0 && e.status!=="done");
         if(!list.length) return toast("Keine kommenden Veranstaltungen.");
         saveICS(list, "sportticker.ics");
       };
@@ -618,6 +649,7 @@ const MODULES = [
         }catch{ toast("Das ist keine gültige Sicherung."); }
       };
       $("#editTpl").onclick = openTemplateEditor;
+      $("#whatsNew").onclick = () => showWhatsNew(0);
       $("#stateSel").onchange = ev => {
         HSTATE = ev.target.value; _hcache = {};
         try{ localStorage.setItem(STATE_KEY, HSTATE); }catch{}
@@ -639,10 +671,15 @@ const MODULES = [
 /* ---------- Kalenderdatei (.ics) mit Erinnerung ---------- */
 function icsEsc(s){ return String(s||"").replace(/\\/g,"\\\\").replace(/\n/g,"\\n").replace(/,/g,"\\,").replace(/;/g,"\\;"); }
 function icsDate(s){ return s.replace(/-/g,""); }
-function icsEvent(uid, title, date, time, durH, desc, loc, url, remindDays){
+function icsEvent(uid, title, date, time, durH, desc, loc, url, remindDays, endDate){
   const L = ["BEGIN:VEVENT","UID:"+uid+"@sportkalender",
     "DTSTAMP:"+new Date().toISOString().replace(/[-:]/g,"").replace(/\.\d+/,"")];
-  if(time){
+  if(endDate && endDate > date){
+    const nx = parse(endDate); nx.setDate(nx.getDate()+1);
+    L.push("DTSTART;VALUE=DATE:"+icsDate(date),"DTEND;VALUE=DATE:"+icsDate(ymd(nx)));
+    if(time) desc = "Start: "+time+" Uhr\n"+desc;
+    time = "";
+  }else if(time){
     const [h,mi] = time.split(":").map(Number);
     const st = new Date(...date.split("-").map((v,i)=>i===1?v-1:+v), h, mi);
     const en = new Date(st.getTime()+durH*3600000);
@@ -670,7 +707,7 @@ function buildICS(list){
     const url = safeUrl(e.url);
     const st = (STATUS[e.status]||STATUS.watch).name;
     L = L.concat(icsEvent(e.id, sportOf(e.sport).ic+" "+e.title, e.date, e.time, 3,
-      "Status: "+st+(e.distance?"\nStrecke: "+e.distance:"")+(e.notes?"\n"+e.notes:""), e.location, url, e.remind||0));
+      "Status: "+st+(e.distance?"\nStrecke: "+e.distance:"")+(e.notes?"\n"+e.notes:""), e.location, url, e.remind||0, endOf(e)));
     if(e.status==="watch" && e.deadline && daysUntil(e.deadline)>=0){
       L = L.concat(icsEvent(e.id+"-ddl", "Anmeldeschluss: "+e.title, e.deadline, "", 0, "Jetzt anmelden!", "", url, 2));
     }
@@ -712,9 +749,10 @@ function openEditor(ev, presetDate, keepNew){
       <div class="seg" id="f_status">${Object.entries(STATUS).map(([k,s])=>`<button type="button" data-s="${k}" class="${s.cls} ${e.status===k?"on":""}">${s.name}</button>`).join("")}</div>
     </div>
     <div class="two">
-      <label class="field"><span>Datum</span><input type="date" id="f_date" value="${esc(e.date)}"></label>
+      <label class="field"><span>Datum (Start)</span><input type="date" id="f_date" value="${esc(e.date)}"></label>
       <label class="field"><span>Startzeit (optional)</span><input type="time" id="f_time" value="${esc(e.time)}"></label>
     </div>
+    <label class="field"><span>Enddatum (nur bei mehrtägigen Veranstaltungen)</span><input type="date" id="f_end" value="${esc(e.endDate||"")}"></label>
     <div class="two">
       <label class="field"><span>Sportart</span><select id="f_sport">${SPORTS.map(s=>`<option value="${s.id}" ${e.sport===s.id?"selected":""}>${s.ic} ${s.name}</option>`).join("")}</select></label>
       <label class="field"><span>Strecke / Distanz</span><input id="f_distance" value="${esc(e.distance)}" placeholder="z. B. 21,1 km"></label>
@@ -775,7 +813,7 @@ function openEditor(ev, presetDate, keepNew){
 }
 function formValues(){
   const v = {...editing,
-    title: $("#f_title").value.trim(), date: $("#f_date").value, time: $("#f_time").value,
+    title: $("#f_title").value.trim(), date: $("#f_date").value, time: $("#f_time").value, endDate: $("#f_end").value,
     sport: $("#f_sport").value, distance: $("#f_distance").value.trim(), location: $("#f_location").value.trim(),
     url: $("#f_url").value.trim(), remind: +$("#f_remind").value, deadline: $("#f_deadline").value,
     notes: $("#f_notes").value.trim(), updated: Date.now(),
@@ -787,9 +825,11 @@ function formValues(){
 function readForm(){
   const v = formValues();
   if(v.result.time && toSec(v.result.time)==null){ toast("Zielzeit bitte als h:mm:ss eingeben, z. B. 1:45:30"); return null; }
-  if(v.result.time){ const sec = toSec(v.result.time); v.result.time = fmtSec(sec); if(daysUntil(v.date)<=0) v.status = "done"; }
+  if(v.result.time){ const sec = toSec(v.result.time); v.result.time = fmtSec(sec); if(daysUntil(endOf(v))<=0) v.status = "done"; }
   if(!v.title){ toast("Bitte einen Namen eingeben."); $("#f_title").focus(); return null; }
   if(!v.date){ toast("Bitte ein Datum wählen."); return null; }
+  if(v.endDate && v.endDate < v.date){ toast("Das Enddatum liegt vor dem Start."); return null; }
+  if(v.endDate === v.date) v.endDate = "";
   if(v.url && !safeUrl(v.url)){ toast("Der Link sieht nicht gültig aus."); return null; }
   return v;
 }
@@ -857,12 +897,50 @@ function closeEditor(){ $("#backdrop").classList.remove("open"); $("#sheet").cla
 $("#backdrop").onclick = closeEditor;
 $("#addBtn").onclick = () => openEditor(null, UI.tab==="calendar" ? UI.calSel : null);
 
+/* ---------- Was ist neu ---------- */
+const APP_VERSION = 5;
+const SEEN_KEY = "sportticker.seenVersion";
+const CHANGELOG = [
+  {v:5, date:"13.11.2026", items:[
+    "🚵 Neue Sportart Gravel / Bikepacking – mit ausführlicher Packliste von Rahmentasche bis Schlafsack",
+    "🥾 Neue Sportart Wandern – mit eigener Packliste",
+    "📆 Mehrtägige Veranstaltungen: Trag ein Enddatum ein, z. B. für Etappenrennen. Der Kalender zeigt sie an jedem Tag.",
+    "✨ Dieser Hinweis: Nach jedem Update siehst du einmal, was neu ist. Unter Mehr → „Was ist neu“ jederzeit wieder."]},
+  {v:4, date:"13.11.2026", items:["🎉 Deutsche Feiertage im Kalender, mit Auswahl des Bundeslands"]},
+  {v:3, date:"13.11.2026", items:["🎒 Packliste","💶 Startgeld mit Jahresübersicht","⏱ Ergebnisse und Bestzeiten","👋 App weitergeben"]}
+];
+function showWhatsNew(sinceVersion){
+  const list = CHANGELOG.filter(c => c.v > sinceVersion);
+  if(!list.length) return;
+  $("#sheetInner").innerHTML = `
+    <div class="grab"></div>
+    <div style="text-align:center;margin:6px 0 4px"><img src="icon-180.png" alt="" style="width:64px;height:64px;border-radius:15px"></div>
+    <h3 style="text-align:center;margin:6px 0 2px;font-size:21px">Was ist neu?</h3>
+    <div class="sub" style="text-align:center;margin-bottom:12px">Mein Sportticker · Version ${APP_VERSION}</div>
+    ${list.map(c=>`<div class="info"><p class="sub" style="margin:0 0 4px">Version ${c.v} · ${c.date}</p>
+      ${c.items.map(i=>`<p>${esc(i)}</p>`).join("")}</div>`).join("")}
+    <div class="actions" style="margin-top:12px"><button class="btn primary" id="wnOk">Alles klar</button></div>`;
+  $("#wnOk").onclick = closeEditor;
+  $("#backdrop").classList.add("open"); $("#sheet").classList.add("open");
+}
+function checkWhatsNew(){
+  let seen = null;
+  try{ seen = localStorage.getItem(SEEN_KEY); }catch{}
+  try{ localStorage.setItem(SEEN_KEY, String(APP_VERSION)); }catch{}
+  if(seen === null){
+    // Neue Nutzer: kein Hinweis. Bisherige Nutzer (vor Version 5): zeigen, was seit Version 4 neu ist.
+    if(STORE.events.length) showWhatsNew(4);
+    return;
+  }
+  if(+seen < APP_VERSION) showWhatsNew(+seen);
+}
+
 /* ---------- Haupt-Rendering ---------- */
 function render(){
   $("#tabs").innerHTML = MODULES.map(m=>`<button class="tab ${UI.tab===m.id?"on":""}" data-t="${m.id}"><span class="ic">${m.ic}</span>${m.name}</button>`).join("");
   $("#tabs").querySelectorAll(".tab").forEach(b => b.onclick = () => { UI.tab = b.dataset.t; render(); window.scrollTo(0,0); });
-  const reg = STORE.events.filter(e=>e.status==="reg" && daysUntil(e.date)>=0).length;
-  const watch = STORE.events.filter(e=>e.status==="watch" && daysUntil(e.date)>=0).length;
+  const reg = STORE.events.filter(e=>e.status==="reg" && daysUntil(endOf(e))>=0).length;
+  const watch = STORE.events.filter(e=>e.status==="watch" && daysUntil(endOf(e))>=0).length;
   $("#headSub").textContent = STORE.events.length ? `${reg} angemeldet · ${watch} beobachtet` : "Deine Wettkämpfe im Blick";
   const mod = MODULES.find(m=>m.id===UI.tab) || MODULES[0];
   mod.render($("#view"));
@@ -871,6 +949,7 @@ function render(){
 STORE.onChange(render);
 render();
 STORE.init();
+setTimeout(checkWhatsNew, 400);
 if("serviceWorker" in navigator){ navigator.serviceWorker.register("sw.js").catch(()=>{}); }
 </script>
 </body>
