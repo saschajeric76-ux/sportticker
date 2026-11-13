@@ -20,6 +20,7 @@
   --done:#6b7280; --done-soft:#eceef1;
   --warn:#b45309; --warn-soft:#fef3c7;
   --radius:16px;
+  --hol:#dc2626; --hol-soft:#fdecec;
 }
 @media (prefers-color-scheme: dark){
   :root{
@@ -29,6 +30,7 @@
     --reg:#4ade80; --reg-soft:#173323;
     --done:#9aa3af; --done-soft:#262b33;
     --warn:#fbbf24; --warn-soft:#3a2e12;
+    --hol:#f87171; --hol-soft:#3a1d1d;
   }
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -83,7 +85,14 @@ a.link{font-size:13px;color:var(--accent);text-decoration:none;font-weight:600;m
 .day{aspect-ratio:1/1;border-radius:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;
   cursor:pointer;font-size:15px;position:relative;border:0;background:none}
 .day.out{color:var(--muted);opacity:.45}
+.day.sun,.day.hol{color:var(--hol)}
+.day.hol{background:var(--hol-soft)}
 .day.today{color:var(--accent);font-weight:700}
+.hol-list{margin-top:10px;border-top:1px solid var(--line);padding-top:8px;font-size:13px;color:var(--muted)}
+.hol-list div{display:flex;justify-content:space-between;padding:3px 2px}
+.hol-list b{color:var(--hol);font-weight:600}
+.hol-banner{background:var(--hol-soft);color:var(--hol);border-radius:12px;padding:9px 12px;margin:-2px 0 10px;font-size:14px;font-weight:600}
+.legend .hl{width:10px;height:10px;border-radius:3px;background:var(--hol-soft);box-shadow:0 0 0 1px var(--hol) inset;display:inline-block}
 .day.sel{background:var(--text);color:var(--bg)}
 .dots{display:flex;gap:3px;height:6px;margin-top:3px}
 .dot{width:6px;height:6px;border-radius:50%}
@@ -299,6 +308,38 @@ const toSec = t => { if(!t) return null; const p = String(t).trim().split(/[:.,]
 const fmtSec = sec => { const h = Math.floor(sec/3600), m = Math.floor(sec%3600/60), x = sec%60; return h ? h+":"+pad(m)+":"+pad(x) : m+":"+pad(x); };
 const hasResult = e => e.result && (e.result.time || e.result.place);
 
+/* ---------- Deutsche Feiertage ---------- */
+const STATES = [["","Nur bundesweite Feiertage"],["BW","Baden-Württemberg"],["BY","Bayern"],["BE","Berlin"],["BB","Brandenburg"],
+  ["HB","Bremen"],["HH","Hamburg"],["HE","Hessen"],["MV","Mecklenburg-Vorpommern"],["NI","Niedersachsen"],["NW","Nordrhein-Westfalen"],
+  ["RP","Rheinland-Pfalz"],["SL","Saarland"],["SN","Sachsen"],["ST","Sachsen-Anhalt"],["SH","Schleswig-Holstein"],["TH","Thüringen"]];
+const STATE_KEY = "sportticker.bundesland.v1";
+let HSTATE = (()=>{ try{ return localStorage.getItem(STATE_KEY) || ""; }catch{ return ""; } })();
+let _hcache = {};
+function easter(y){ // Gaußsche Osterformel (gregorianisch)
+  const a=y%19, b=Math.floor(y/100), c=y%100, d=Math.floor(b/4), e=b%4, f=Math.floor((b+8)/25), g=Math.floor((b-f+1)/3),
+        h=(19*a+b-d-g+15)%30, i=Math.floor(c/4), k=c%4, l=(32+2*e+2*i-h-k)%7, m=Math.floor((a+11*h+22*l)/451),
+        mo=Math.floor((h+l-7*m+114)/31), da=((h+l-7*m+114)%31)+1;
+  return new Date(y, mo-1, da);
+}
+function holidays(y){
+  const key = y+"|"+HSTATE; if(_hcache[key]) return _hcache[key];
+  const E = easter(y), off = n => ymd(new Date(y, E.getMonth(), E.getDate()+n)), fix = (m,d) => y+"-"+pad(m)+"-"+pad(d);
+  const bb = new Date(y,10,22); bb.setDate(22-((bb.getDay()-3+7)%7)); // Mittwoch vor dem 23. November
+  const list = [
+    [fix(1,1),"Neujahr"], [fix(1,6),"Heilige Drei Könige",["BW","BY","ST"]], [fix(3,8),"Internationaler Frauentag",["BE","MV"]],
+    [off(-2),"Karfreitag"], [off(0),"Ostersonntag"], [off(1),"Ostermontag"], [fix(5,1),"Tag der Arbeit"],
+    [off(39),"Christi Himmelfahrt"], [off(49),"Pfingstsonntag"], [off(50),"Pfingstmontag"],
+    [off(60),"Fronleichnam",["BW","BY","HE","NW","RP","SL"]], [fix(8,15),"Mariä Himmelfahrt",["SL","BY"]],
+    [fix(9,20),"Weltkindertag",["TH"]], [fix(10,3),"Tag der Deutschen Einheit"],
+    [fix(10,31),"Reformationstag",["BB","HB","HH","MV","NI","SN","ST","SH","TH"]], [fix(11,1),"Allerheiligen",["BW","BY","NW","RP","SL"]],
+    [ymd(bb),"Buß- und Bettag",["SN"]], [fix(12,25),"1. Weihnachtstag"], [fix(12,26),"2. Weihnachtstag"]
+  ];
+  const map = {};
+  for(const [d,n,st] of list){ if(!st || st.includes(HSTATE)) map[d] = n; }
+  return _hcache[key] = map;
+}
+const holidayOf = s => s ? (holidays(+s.slice(0,4))[s] || null) : null;
+
 /* ---------- Zustand ---------- */
 const UI = {
   tab: "overview",
@@ -343,7 +384,8 @@ function getNotices(){
 function cardHTML(e){
   const d = parse(e.date), n = daysUntil(e.date), s = sportOf(e.sport), st = STATUS[e.status]||STATUS.watch;
   const url = safeUrl(e.url);
-  const meta = [e.time ? e.time+" Uhr" : "", e.location, e.distance].filter(Boolean).map(esc).join(" · ");
+  const hol = holidayOf(e.date);
+  const meta = [e.time ? e.time+" Uhr" : "", e.location, e.distance, hol ? "🎉 "+hol : ""].filter(Boolean).map(esc).join(" · ");
   return `<div class="card" data-id="${esc(e.id)}">
     <div class="date ${n<0?"past":""}"><div class="d">${d.getDate()}</div><div class="m">${MON_SHORT[d.getMonth()]}</div></div>
     <div class="body">
@@ -411,11 +453,14 @@ const MODULES = [
       for(let i=0;i<42;i++){
         const d = new Date(start.getFullYear(), start.getMonth(), start.getDate()+i);
         const k = ymd(d), evs = byDay[k] || [];
-        const cls = ["day", d.getMonth()!==mo?"out":"", k===t?"today":"", k===UI.calSel?"sel":""].join(" ");
-        cells += `<button class="${cls}" data-day="${k}">${d.getDate()}
+        const hol = holidayOf(k);
+        const cls = ["day", d.getMonth()!==mo?"out":"", i%7===6?"sun":"", hol?"hol":"", k===t?"today":"", k===UI.calSel?"sel":""].join(" ");
+        cells += `<button class="${cls}" data-day="${k}" ${hol?`title="${esc(hol)}"`:""}>${d.getDate()}
           <span class="dots">${evs.slice(0,3).map(e=>`<span class="dot ${(STATUS[e.status]||STATUS.watch).cls}"></span>`).join("")}</span></button>`;
       }
       const dayEvents = sorted().filter(e=>e.date===UI.calSel);
+      const monthHol = Object.entries(holidays(y)).filter(([d])=>+d.slice(5,7)===mo+1).sort();
+      const selHol = holidayOf(UI.calSel);
       root.innerHTML = `
         <div class="cal">
           <div class="cal-head">
@@ -424,9 +469,11 @@ const MODULES = [
             <button class="nav" id="nextM" aria-label="Nächster Monat">›</button>
           </div>
           <div class="grid">${WD.map(w=>`<div class="wd">${w}</div>`).join("")}${cells}</div>
-          <div class="legend"><span><i class="dot reg"></i>Angemeldet</span><span><i class="dot watch"></i>Beobachtet</span><span><i class="dot done"></i>Teilgenommen</span></div>
+          <div class="legend"><span><i class="dot reg"></i>Angemeldet</span><span><i class="dot watch"></i>Beobachtet</span><span><i class="dot done"></i>Teilgenommen</span><span><i class="hl"></i>Feiertag</span></div>
+          ${monthHol.length ? `<div class="hol-list">${monthHol.map(([d,n])=>`<div><span>${fmtShort(d)} · ${WD_LONG[parse(d).getDay()]}</span><b>${esc(n)}</b></div>`).join("")}</div>` : ""}
         </div>
         <h2>${fmtLong(UI.calSel)}</h2>
+        ${selHol ? `<div class="hol-banner">🎉 ${esc(selHol)}</div>` : ""}
         ${dayEvents.length ? dayEvents.map(cardHTML).join("") :
           `<div class="empty" style="padding:16px">Keine Veranstaltung an diesem Tag.<br><br><button class="btn small" id="addHere">+ Hier eintragen</button></div>`}`;
       $("#prevM").onclick = () => { UI.calMonth = new Date(y, mo-1, 1); render(); };
@@ -521,6 +568,11 @@ const MODULES = [
           <p>📲 <b>Als echte iPhone-Mitteilung:</b> Öffne eine Veranstaltung und tippe auf „In iPhone-Kalender übernehmen“, dann auf „Hinzufügen“. Deine Erinnerung ist schon eingestellt – das iPhone meldet sich zuverlässig, auch wenn die App geschlossen ist.</p>
           <div class="actions"><button class="btn small" id="exportAll" ${n?"":"disabled"}>Alle kommenden in Kalender exportieren</button></div>
         </div>
+        <h2>Feiertage</h2>
+        <div class="info">
+          <p>🎉 Feiertage werden im Kalender rot markiert. Wähle dein Bundesland für die regionalen Feiertage:</p>
+          <label class="field" style="margin:8px 0 0"><select id="stateSel">${STATES.map(([k,n])=>`<option value="${k}" ${HSTATE===k?"selected":""}>${n}</option>`).join("")}</select></label>
+        </div>
         <h2>Packliste</h2>
         <div class="info">
           <p>🎒 Deine Grundausstattung – sie erscheint automatisch in jeder Veranstaltung, passend zur Sportart.</p>
@@ -547,7 +599,7 @@ const MODULES = [
           <label class="field" style="margin:8px 0"><textarea id="importText" placeholder="[ { … } ]"></textarea></label>
           <div class="actions"><button class="btn small" id="importBtn">Importieren</button></div>
         </div>
-        <div class="syncnote">Mein Sportticker · Version 3</div>`;
+        <div class="syncnote">Mein Sportticker · Version 4</div>`;
       const ex = $("#exportAll"); if(ex) ex.onclick = () => {
         const list = STORE.events.filter(e=>daysUntil(e.date)>=0 && e.status!=="done");
         if(!list.length) return toast("Keine kommenden Veranstaltungen.");
@@ -566,6 +618,11 @@ const MODULES = [
         }catch{ toast("Das ist keine gültige Sicherung."); }
       };
       $("#editTpl").onclick = openTemplateEditor;
+      $("#stateSel").onchange = ev => {
+        HSTATE = ev.target.value; _hcache = {};
+        try{ localStorage.setItem(STATE_KEY, HSTATE); }catch{}
+        toast(HSTATE ? "Feiertage für "+STATES.find(x=>x[0]===HSTATE)[1] : "Nur bundesweite Feiertage"); render();
+      };
       $("#shareApp").onclick = async () => {
         const url = location.href.split("#")[0];
         try{ if(navigator.share){ await navigator.share({title:"Mein Sportticker", text:"Probier mal meine Sport-App aus:", url}); return; } }catch(e){ if(e && e.name==="AbortError") return; }
