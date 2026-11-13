@@ -658,7 +658,7 @@ function icsEvent(uid, title, date, time, durH, desc, loc, url, remindDays){
   if(desc || url) L.push("DESCRIPTION:"+icsEsc([desc, url].filter(Boolean).join("\n")));
   if(remindDays>0){
     // bei ganztägig: Erinnerung um 9 Uhr am Tag X vorher
-    const trig = time ? "-P"+remindDays+"D" : "-P"+remindDays+"DT15H";
+    const trig = time ? "-P"+remindDays+"D" : (remindDays>1 ? "-P"+(remindDays-1)+"DT15H" : "-PT15H");
     L.push("BEGIN:VALARM","ACTION:DISPLAY","DESCRIPTION:"+icsEsc(title),"TRIGGER:"+trig,"END:VALARM");
   }
   L.push("END:VEVENT");
