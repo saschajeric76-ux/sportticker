@@ -130,6 +130,33 @@ a.link{font-size:13px;color:var(--accent);text-decoration:none;font-weight:600;m
 .syncnote{font-size:12px;color:var(--muted);text-align:center;margin-top:18px}
 .info{background:var(--card);border-radius:var(--radius);padding:14px;margin-bottom:10px;box-shadow:0 1px 0 var(--line);font-size:14px}
 .info p{margin:6px 0}
+.pill.fee{background:var(--warn-soft);color:var(--warn)}
+.pill.res{background:var(--accent-soft);color:var(--accent)}
+.sec{font-size:15px;margin:20px 2px 10px;padding-top:14px;border-top:1px solid var(--line)}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:6px}
+.stat{background:var(--card);border-radius:14px;padding:12px 6px;text-align:center;box-shadow:0 1px 0 var(--line)}
+.stat b{display:block;font-size:19px;letter-spacing:-.01em}
+.stat span{font-size:12px;color:var(--muted)}
+.stat.warn b{color:var(--warn)} .stat.ok b{color:var(--reg)}
+.lrow{display:flex;align-items:center;gap:10px;background:var(--card);border-radius:14px;padding:12px;margin-bottom:8px;box-shadow:0 1px 0 var(--line)}
+.lrow .grow{flex:1;min-width:0}
+.lrow .t{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lrow .s{font-size:13px;color:var(--muted)}
+.lrow .big{font-size:18px;font-weight:700;font-variant-numeric:tabular-nums}
+.paybtn{border:0;border-radius:10px;padding:7px 10px;font-size:13px;font-weight:600;cursor:pointer;background:var(--warn-soft);color:var(--warn)}
+.paybtn.ok{background:var(--reg-soft);color:var(--reg)}
+.pack-item{display:flex;align-items:center;gap:12px;width:100%;text-align:left;border:0;background:var(--card);border-radius:12px;padding:12px;margin-bottom:6px;cursor:pointer;box-shadow:0 1px 0 var(--line)}
+.pack-item .box{flex:none;width:24px;height:24px;border-radius:7px;box-shadow:0 0 0 2px var(--line) inset;display:flex;align-items:center;justify-content:center;font-size:15px;color:#fff}
+.pack-item.on .box{background:var(--reg);box-shadow:none}
+.pack-item.on .lbl{color:var(--muted);text-decoration:line-through}
+.pack-item .lbl{flex:1}
+.pack-item .x{color:var(--muted);padding:0 4px;font-size:18px}
+.progress{height:8px;border-radius:4px;background:var(--line);overflow:hidden;margin:6px 0 14px}
+.progress i{display:block;height:100%;background:var(--reg);border-radius:4px}
+.addrow{display:flex;gap:8px;margin:10px 0}
+.addrow input{flex:1;border:0;border-radius:12px;padding:11px;background:var(--card);box-shadow:0 0 0 1px var(--line) inset;font-size:16px}
+.tpl-item{display:flex;align-items:center;justify-content:space-between;padding:9px 4px;border-bottom:1px solid var(--line);font-size:15px}
+.tpl-item button{border:0;background:none;color:var(--muted);font-size:18px;cursor:pointer}
 </style>
 </head>
 <body>
@@ -243,12 +270,42 @@ const STORE = {
   }
 };
 
+/* ---------- Packliste ---------- */
+const PACK_KEY = "sportticker.pack.v1";
+const PACK_DEFAULT = {
+  common:["Startunterlagen / Startnummer","Personalausweis","Sicherheitsnadeln / Startnummernband","Handtuch","Wechselkleidung","Getränk","Snacks / Gels","Geld / EC-Karte","Handy + Ladekabel","Sonnencreme"],
+  lauf:["Laufschuhe","Laufshirt","Laufhose","Laufsocken","Sportuhr","Regenjacke"],
+  rad:["Fahrrad","Helm","Radschuhe","Radtrikot","Radhose","Trinkflaschen","Ersatzschlauch + Pumpe","Radbrille"],
+  tri:["Neoprenanzug","Schwimmbrille","Badekappe","Fahrrad","Helm","Radschuhe","Laufschuhe","Trisuit","Handtuch für die Wechselzone"],
+  schwimm:["Badehose","Schwimmbrille","Badekappe","Neoprenanzug","Badelatschen"],
+  trail:["Trailschuhe","Laufweste / Rucksack","Pflichtausrüstung","Stirnlampe","Stöcke","Rettungsdecke"],
+  sonst:[]
+};
+const PACK = {
+  tpl:null,
+  load(){ try{ const r = localStorage.getItem(PACK_KEY); this.tpl = r ? JSON.parse(r) : null; }catch{} if(!this.tpl) this.tpl = JSON.parse(JSON.stringify(PACK_DEFAULT)); },
+  save(){ try{ localStorage.setItem(PACK_KEY, JSON.stringify(this.tpl)); }catch{} }
+};
+PACK.load();
+const packItems = e => [...new Set([...(PACK.tpl.common||[]), ...(PACK.tpl[e.sport]||[]), ...(e.packExtra||[])])];
+function packProgress(e){ const items = packItems(e), done = e.pack||[]; return {c: items.filter(i=>done.includes(i)).length, n: items.length}; }
+
+/* ---------- Startgeld & Zeiten ---------- */
+const eur = v => (+v||0).toLocaleString("de-DE",{style:"currency",currency:"EUR"});
+const parseMoney = s => { const v = parseFloat(String(s||"").replace(/\s|€/g,"").replace(",",".")); return isFinite(v) && v>0 ? Math.round(v*100)/100 : 0; };
+const toSec = t => { if(!t) return null; const p = String(t).trim().split(/[:.,]/).map(Number);
+  if(p.length<2 || p.length>3 || p.some(x=>isNaN(x)||x<0)) return null;
+  return p.length===3 ? p[0]*3600+p[1]*60+p[2] : p[0]*60+p[1]; };
+const fmtSec = sec => { const h = Math.floor(sec/3600), m = Math.floor(sec%3600/60), x = sec%60; return h ? h+":"+pad(m)+":"+pad(x) : m+":"+pad(x); };
+const hasResult = e => e.result && (e.result.time || e.result.place);
+
 /* ---------- Zustand ---------- */
 const UI = {
   tab: "overview",
   filter: "all",
   calMonth: (()=>{ const d=new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); })(),
-  calSel: todayStr()
+  calSel: todayStr(),
+  feeYear: new Date().getFullYear()
 };
 
 const sorted = () => [...STORE.events].sort((a,b)=> (a.date+(a.time||"")).localeCompare(b.date+(b.time||"")));
@@ -268,6 +325,16 @@ function getNotices(){
         out.push({e, sort:dn-0.5, html:`Anmeldeschluss für <b>${esc(e.title)}</b> ist ${relDays(dn)} (${fmtShort(e.deadline)}).`});
       }
     }
+    if(e.status==="reg" && e.fee>0 && !e.paid && n>=0){
+      out.push({e, sort:n+0.3, ic:"💶", html:`Startgeld für <b>${esc(e.title)}</b> (${eur(e.fee)}) ist noch offen.`});
+    }
+    if(e.status!=="done" && e.status==="reg" && n<0 && n>=-14){
+      out.push({e, sort:500, ic:"⏱", html:`Wie lief <b>${esc(e.title)}</b>? Trag dein Ergebnis ein.`});
+    }
+    if(n>=0 && n<=3 && e.status==="reg"){
+      const p = packProgress(e);
+      if(p.n && p.c<p.n) out.push({e, sort:n+0.2, ic:"🎒", html:`Packliste für <b>${esc(e.title)}</b>: ${p.c} von ${p.n} gepackt.`});
+    }
   }
   return out.sort((a,b)=>a.sort-b.sort);
 }
@@ -284,6 +351,8 @@ function cardHTML(e){
       <div class="meta">${meta || esc(s.name)}</div>
       <div class="row">
         <span class="pill ${st.cls}">${st.name}</span>
+        ${e.result && e.result.time ? `<span class="pill res">⏱ ${esc(e.result.time)}</span>` : ""}
+        ${e.fee>0 && !e.paid && e.status==="reg" ? `<span class="pill fee">💶 offen</span>` : ""}
         ${n>=0 ? `<span class="pill count">${relDays(n)}</span>` : ""}
         ${url ? `<a class="link" href="${esc(url)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">Zur Website ↗</a>` : ""}
       </div>
@@ -320,7 +389,7 @@ const MODULES = [
         return;
       }
       root.innerHTML = `
-        ${notices.length ? `<h2>Hinweise</h2>${notices.map(x=>`<div class="notice" data-id="${esc(x.e.id)}">🔔<div>${x.html}</div></div>`).join("")}` : ""}
+        ${notices.length ? `<h2>Hinweise</h2>${notices.map(x=>`<div class="notice" data-id="${esc(x.e.id)}">${x.ic||"🔔"}<div>${x.html}</div></div>`).join("")}` : ""}
         ${chipsHTML()}
         <h2>Demnächst</h2>
         ${upcoming.length ? upcoming.map(cardHTML).join("") : `<div class="empty" style="padding:16px">Keine kommenden Veranstaltungen.</div>`}
@@ -373,6 +442,75 @@ const MODULES = [
     }
   },
   {
+    id:"results", name:"Ergebnisse", ic:"⏱️",
+    render(root){
+      const year = new Date().getFullYear();
+      const done = sorted().filter(hasResult).reverse();
+      const yearCount = STORE.events.filter(e=>(e.status==="done"||hasResult(e)) && parse(e.date).getFullYear()===year).length;
+      const allCount = STORE.events.filter(e=>e.status==="done"||hasResult(e)).length;
+      const best = {};
+      for(const e of done){
+        const k = (e.distance||"").toLowerCase().replace(/\s+/g,"").replace(",",".");
+        const sec = toSec(e.result.time);
+        if(!k || sec==null) continue;
+        if(!best[k] || sec<best[k].sec) best[k] = {sec, e};
+      }
+      const bests = Object.values(best).sort((a,b)=>a.sec-b.sec);
+      root.innerHTML = `
+        <div class="stats">
+          <div class="stat"><b>${yearCount}</b><span>Wettkämpfe ${year}</span></div>
+          <div class="stat"><b>${allCount}</b><span>insgesamt</span></div>
+          <div class="stat"><b>${bests.length}</b><span>Bestzeiten</span></div>
+        </div>
+        ${bests.length ? `<h2>🏆 Bestzeiten</h2>${bests.map(({sec,e})=>`
+          <div class="lrow" data-id="${esc(e.id)}"><div class="grow"><div class="t">${esc(e.distance)}</div>
+          <div class="s">${sportOf(e.sport).ic} ${esc(e.title)} · ${fmtShort(e.date)} ${parse(e.date).getFullYear()}</div></div>
+          <div class="big">${fmtSec(sec)}</div></div>`).join("")}` : ""}
+        <h2>Alle Ergebnisse</h2>
+        ${done.length ? done.map(e=>{
+          const r = e.result, pl = [r.place ? "Platz "+esc(r.place)+(r.total?" von "+esc(r.total):"") : "", r.ak ? "AK "+esc(r.ak) : ""].filter(Boolean).join(" · ");
+          return `<div class="lrow" data-id="${esc(e.id)}"><div class="grow"><div class="t">${sportOf(e.sport).ic} ${esc(e.title)}</div>
+            <div class="s">${fmtShort(e.date)} ${parse(e.date).getFullYear()}${e.distance?" · "+esc(e.distance):""}${pl?"<br>"+pl:""}${r.note?"<br>„"+esc(r.note)+"“":""}</div></div>
+            ${r.time?`<div class="big">${esc(r.time)}</div>`:""}</div>`;}).join("") :
+          `<div class="empty" style="padding:20px">Noch keine Ergebnisse.<br>Öffne eine vergangene Veranstaltung und trag unter „Ergebnis“ deine Zeit ein.</div>`}`;
+      root.querySelectorAll(".lrow[data-id]").forEach(c => c.onclick = () => openEditor(STORE.events.find(e=>e.id===c.dataset.id)));
+    }
+  },
+  {
+    id:"fees", name:"Startgeld", ic:"💶",
+    render(root){
+      const withFee = STORE.events.filter(e=>e.fee>0);
+      const years = [...new Set([new Date().getFullYear(), ...withFee.map(e=>parse(e.date).getFullYear())])].sort();
+      const y = UI.feeYear;
+      const list = withFee.filter(e=>parse(e.date).getFullYear()===y).sort((a,b)=>a.date.localeCompare(b.date));
+      const booked = list.filter(e=>e.status!=="watch");
+      const sum = a => a.reduce((t,e)=>t+(+e.fee||0),0);
+      const total = sum(booked), paid = sum(booked.filter(e=>e.paid)), open = total-paid, planned = sum(list.filter(e=>e.status==="watch"));
+      const row = e => `<div class="lrow"><div class="grow" data-open="${esc(e.id)}"><div class="t">${sportOf(e.sport).ic} ${esc(e.title)}</div>
+          <div class="s">${fmtShort(e.date)} · ${(STATUS[e.status]||STATUS.watch).name}</div></div>
+          <div style="text-align:right"><div class="big">${eur(e.fee)}</div>
+          ${e.status!=="watch" ? `<button class="paybtn ${e.paid?"ok":""}" data-pay="${esc(e.id)}">${e.paid?"✓ bezahlt":"offen"}</button>` : ""}</div></div>`;
+      root.innerHTML = `
+        <div class="chips">${years.map(v=>`<button class="chip ${v===y?"on":""}" data-y="${v}">${v}</button>`).join("")}</div>
+        <div class="stats">
+          <div class="stat"><b>${eur(total)}</b><span>Startgeld ${y}</span></div>
+          <div class="stat ok"><b>${eur(paid)}</b><span>bezahlt</span></div>
+          <div class="stat ${open>0?"warn":""}"><b>${eur(open)}</b><span>offen</span></div>
+        </div>
+        ${planned>0 ? `<div class="hint" style="margin:8px 2px 0">Dazu kämen ${eur(planned)} für beobachtete Veranstaltungen.</div>` : ""}
+        <h2>Angemeldet &amp; teilgenommen</h2>
+        ${booked.length ? booked.map(row).join("") : `<div class="empty" style="padding:16px">Für ${y} noch kein Startgeld eingetragen.</div>`}
+        ${list.some(e=>e.status==="watch") ? `<h2>Beobachtet</h2>${list.filter(e=>e.status==="watch").map(row).join("")}` : ""}
+        <div class="hint" style="margin-top:12px">Startgeld trägst du in der jeweiligen Veranstaltung ein. Tippe auf „offen“, um es als bezahlt zu markieren.</div>`;
+      root.querySelectorAll("[data-y]").forEach(b => b.onclick = () => { UI.feeYear = +b.dataset.y; render(); });
+      root.querySelectorAll("[data-open]").forEach(b => b.onclick = () => openEditor(STORE.events.find(e=>e.id===b.dataset.open)));
+      root.querySelectorAll("[data-pay]").forEach(b => b.onclick = () => {
+        const e = STORE.events.find(x=>x.id===b.dataset.pay); if(!e) return;
+        STORE.save({...e, paid: !e.paid, updated: Date.now()});
+      });
+    }
+  },
+  {
     id:"more", name:"Mehr", ic:"⚙️",
     render(root){
       const n = STORE.events.length;
@@ -382,6 +520,17 @@ const MODULES = [
           <p>🔔 <b>In der App:</b> Unter „Übersicht“ erscheinen Hinweise, sobald eine Veranstaltung in deinem Erinnerungszeitraum liegt oder ein Anmeldeschluss naht.</p>
           <p>📲 <b>Als echte iPhone-Mitteilung:</b> Öffne eine Veranstaltung und tippe auf „In iPhone-Kalender übernehmen“, dann auf „Hinzufügen“. Deine Erinnerung ist schon eingestellt – das iPhone meldet sich zuverlässig, auch wenn die App geschlossen ist.</p>
           <div class="actions"><button class="btn small" id="exportAll" ${n?"":"disabled"}>Alle kommenden in Kalender exportieren</button></div>
+        </div>
+        <h2>Packliste</h2>
+        <div class="info">
+          <p>🎒 Deine Grundausstattung – sie erscheint automatisch in jeder Veranstaltung, passend zur Sportart.</p>
+          <div class="actions"><button class="btn small" id="editTpl">Packliste bearbeiten</button></div>
+        </div>
+        <h2>App weitergeben</h2>
+        <div class="info">
+          <p>👋 Schick einem Freund einfach diesen Link. Er bekommt seine eigene, leere App – deine Einträge sieht er nicht.</p>
+          <p><b>${esc(location.href.split("#")[0])}</b></p>
+          <div class="actions"><button class="btn small" id="shareApp">Link teilen</button></div>
         </div>
         <h2>Auf den Home-Bildschirm</h2>
         <div class="info">
@@ -398,7 +547,7 @@ const MODULES = [
           <label class="field" style="margin:8px 0"><textarea id="importText" placeholder="[ { … } ]"></textarea></label>
           <div class="actions"><button class="btn small" id="importBtn">Importieren</button></div>
         </div>
-        <div class="syncnote">Mein Sportticker · Version 2</div>`;
+        <div class="syncnote">Mein Sportticker · Version 3</div>`;
       const ex = $("#exportAll"); if(ex) ex.onclick = () => {
         const list = STORE.events.filter(e=>daysUntil(e.date)>=0 && e.status!=="done");
         if(!list.length) return toast("Keine kommenden Veranstaltungen.");
@@ -408,14 +557,22 @@ const MODULES = [
         const raw = $("#importText").value.trim();
         if(!raw) return toast("Bitte zuerst die Sicherung einfügen.");
         try{
-          const list = JSON.parse(raw);
+          const data = JSON.parse(raw);
+          const list = Array.isArray(data) ? data : data.events;
           if(!Array.isArray(list)) throw 0;
+          if(!Array.isArray(data) && data.packTemplate){ PACK.tpl = data.packTemplate; PACK.save(); }
           const r = STORE.importList(list);
           toast(`${r.added} neu, ${r.updated} aktualisiert.`);
         }catch{ toast("Das ist keine gültige Sicherung."); }
       };
+      $("#editTpl").onclick = openTemplateEditor;
+      $("#shareApp").onclick = async () => {
+        const url = location.href.split("#")[0];
+        try{ if(navigator.share){ await navigator.share({title:"Mein Sportticker", text:"Probier mal meine Sport-App aus:", url}); return; } }catch(e){ if(e && e.name==="AbortError") return; }
+        try{ await navigator.clipboard.writeText(url); toast("Link kopiert."); }catch{ toast(url); }
+      };
       const bk = $("#backup"); if(bk) bk.onclick = async () => {
-        try{ await navigator.clipboard.writeText(JSON.stringify(STORE.events, null, 1)); toast("Sicherung in die Zwischenablage kopiert."); }
+        try{ await navigator.clipboard.writeText(JSON.stringify({app:"sportticker", version:3, events:STORE.events, packTemplate:PACK.tpl})); toast("Sicherung in die Zwischenablage kopiert."); }
         catch{ toast("Kopieren nicht möglich."); }
       };
     }
@@ -477,12 +634,15 @@ function saveICS(list, filename){
 }
 
 /* ---------- Editor (Bottom-Sheet) ---------- */
-let editing = null;
-function openEditor(ev, presetDate){
-  const isNew = !ev;
+let editing = null, editingNew = false;
+function openEditor(ev, presetDate, keepNew){
+  const isNew = keepNew != null ? keepNew : !ev;
+  editingNew = isNew;
   editing = ev ? {...ev} : {id:newId(), title:"", sport:"lauf", date:presetDate||todayStr(), time:"", location:"",
-    distance:"", url:"", status:"watch", remind:7, deadline:"", notes:""};
+    distance:"", url:"", status:"watch", remind:7, deadline:"", notes:"", fee:0, paid:false, pack:[], packExtra:[], result:{}};
   const e = editing;
+  const r = e.result || {};
+  const pp = packProgress(e);
   $("#sheetInner").innerHTML = `
     <div class="grab"></div>
     <div class="sheet-head">
@@ -509,7 +669,25 @@ function openEditor(ev, presetDate){
       <label class="field"><span>Anmeldeschluss</span><input type="date" id="f_deadline" value="${esc(e.deadline)}"></label>
     </div>
     <div class="hint">Beim Status „Beobachtet“ wirst du 14 Tage vor dem Anmeldeschluss erinnert.</div>
-    <label class="field"><span>Notizen</span><textarea id="f_notes" placeholder="Startnummer, Anreise, Startgebühr …">${esc(e.notes)}</textarea></label>
+    <label class="field"><span>Notizen</span><textarea id="f_notes" placeholder="Startnummer, Anreise, Unterkunft …">${esc(e.notes)}</textarea></label>
+    <h4 class="sec">💶 Startgeld</h4>
+    <div class="two">
+      <label class="field"><span>Betrag (€)</span><input id="f_fee" inputmode="decimal" value="${e.fee ? String(e.fee).replace(".",",") : ""}" placeholder="z. B. 35"></label>
+      <div class="field"><span>Bezahlt?</span><div class="seg" id="f_paid">
+        <button type="button" data-p="0" class="watch ${!e.paid?"on":""}">Offen</button><button type="button" data-p="1" class="reg ${e.paid?"on":""}">Bezahlt</button></div></div>
+    </div>
+    <h4 class="sec">🎒 Packliste</h4>
+    <button class="btn" id="openPack" style="width:100%;margin-bottom:4px">Packliste öffnen · ${pp.c} von ${pp.n} gepackt</button>
+    <h4 class="sec">⏱ Ergebnis</h4>
+    <div class="two">
+      <label class="field"><span>Zielzeit (h:mm:ss)</span><input id="f_rtime" value="${esc(r.time)}" placeholder="z. B. 1:45:30"></label>
+      <label class="field"><span>Platz gesamt</span><input id="f_rplace" inputmode="numeric" value="${esc(r.place)}" placeholder="z. B. 128"></label>
+    </div>
+    <div class="two">
+      <label class="field"><span>Teilnehmer gesamt</span><input id="f_rtotal" inputmode="numeric" value="${esc(r.total)}" placeholder="z. B. 950"></label>
+      <label class="field"><span>Platz Altersklasse</span><input id="f_rak" value="${esc(r.ak)}" placeholder="z. B. 12 (M50)"></label>
+    </div>
+    <label class="field"><span>Wie lief's?</span><input id="f_rnote" value="${esc(r.note)}" placeholder="z. B. Neue Bestzeit!"></label>
     ${safeUrl(e.url) && !isNew ? `<a class="btn" style="display:block;text-align:center;text-decoration:none;margin-bottom:10px" href="${esc(safeUrl(e.url))}" target="_blank" rel="noopener">Veranstalter-Website öffnen ↗</a>` : ""}
     <div class="actions"><button class="btn" id="toCal">📲 In iPhone-Kalender übernehmen</button></div>
     ${!isNew ? `<div class="actions" style="margin-top:10px"><button class="btn danger" id="del">Löschen</button></div>` : ""}
@@ -518,6 +696,11 @@ function openEditor(ev, presetDate){
     e.status = b.dataset.s;
     $("#f_status").querySelectorAll("button").forEach(x => x.classList.toggle("on", x===b));
   });
+  $("#f_paid").querySelectorAll("button").forEach(b => b.onclick = () => {
+    e.paid = b.dataset.p==="1";
+    $("#f_paid").querySelectorAll("button").forEach(x => x.classList.toggle("on", x===b));
+  });
+  $("#openPack").onclick = () => { editing = formValues(); openPack(); };
   $("#cancel").onclick = closeEditor;
   $("#save").onclick = () => {
     const v = readForm(); if(!v) return;
@@ -531,18 +714,87 @@ function openEditor(ev, presetDate){
     $("#dYes").onclick = () => { closeEditor(); STORE.remove(e.id); toast("Gelöscht"); };
   };
   $("#backdrop").classList.add("open"); $("#sheet").classList.add("open");
-  if(isNew) setTimeout(()=>$("#f_title").focus(), 250);
+  if(isNew && !ev) setTimeout(()=>$("#f_title").focus(), 250);
 }
-function readForm(){
+function formValues(){
   const v = {...editing,
     title: $("#f_title").value.trim(), date: $("#f_date").value, time: $("#f_time").value,
     sport: $("#f_sport").value, distance: $("#f_distance").value.trim(), location: $("#f_location").value.trim(),
     url: $("#f_url").value.trim(), remind: +$("#f_remind").value, deadline: $("#f_deadline").value,
-    notes: $("#f_notes").value.trim(), updated: Date.now()};
+    notes: $("#f_notes").value.trim(), updated: Date.now(),
+    fee: parseMoney($("#f_fee").value), paid: !!editing.paid,
+    result: {time: $("#f_rtime").value.trim(), place: $("#f_rplace").value.trim(), total: $("#f_rtotal").value.trim(),
+             ak: $("#f_rak").value.trim(), note: $("#f_rnote").value.trim()}};
+  return v;
+}
+function readForm(){
+  const v = formValues();
+  if(v.result.time && toSec(v.result.time)==null){ toast("Zielzeit bitte als h:mm:ss eingeben, z. B. 1:45:30"); return null; }
+  if(v.result.time){ const sec = toSec(v.result.time); v.result.time = fmtSec(sec); if(daysUntil(v.date)<=0) v.status = "done"; }
   if(!v.title){ toast("Bitte einen Namen eingeben."); $("#f_title").focus(); return null; }
   if(!v.date){ toast("Bitte ein Datum wählen."); return null; }
   if(v.url && !safeUrl(v.url)){ toast("Der Link sieht nicht gültig aus."); return null; }
   return v;
+}
+function openPack(){
+  const e = editing;
+  const items = packItems(e), done = e.pack || (e.pack = []);
+  const extra = e.packExtra || (e.packExtra = []);
+  const p = packProgress(e);
+  $("#sheetInner").innerHTML = `
+    <div class="grab"></div>
+    <div class="sheet-head">
+      <button class="btn small" id="packBack">‹ Zurück</button>
+      <h3>🎒 Packliste</h3>
+      <button class="btn small" id="packReset">Leeren</button>
+    </div>
+    <div class="sub">${esc(e.title || "Neue Veranstaltung")} · ${p.c} von ${p.n} gepackt</div>
+    <div class="progress"><i style="width:${p.n ? Math.round(p.c/p.n*100) : 0}%"></i></div>
+    ${items.map((it,i)=>`<button class="pack-item ${done.includes(it)?"on":""}" data-i="${i}">
+      <span class="box">${done.includes(it)?"✓":""}</span><span class="lbl">${esc(it)}</span>
+      ${extra.includes(it) ? `<span class="x" data-del="${i}">×</span>` : ""}</button>`).join("")}
+    <div class="addrow"><input id="packNew" placeholder="Nur für diese Veranstaltung …"><button class="btn small primary" id="packAdd">+</button></div>
+    <div class="hint">Die Grundausstattung bearbeitest du unter Mehr → Packliste.</div>`;
+  const persist = () => {
+    const stored = STORE.events.find(x=>x.id===e.id);
+    if(stored) STORE.save({...stored, pack:[...e.pack], packExtra:[...e.packExtra]});
+  };
+  $("#sheetInner").querySelectorAll(".pack-item").forEach(b => b.onclick = ev => {
+    const it = items[+b.dataset.i];
+    if(ev.target.dataset.del != null){ e.packExtra = extra.filter(x=>x!==it); e.pack = done.filter(x=>x!==it); persist(); return openPack(); }
+    e.pack = done.includes(it) ? done.filter(x=>x!==it) : [...done, it];
+    persist(); openPack();
+  });
+  const add = () => { const v = $("#packNew").value.trim(); if(!v) return; if(!items.includes(v)) e.packExtra = [...extra, v]; persist(); openPack(); setTimeout(()=>$("#packNew").focus(),50); };
+  $("#packAdd").onclick = add;
+  $("#packNew").onkeydown = ev => { if(ev.key==="Enter"){ ev.preventDefault(); add(); } };
+  $("#packReset").onclick = () => { e.pack = []; persist(); openPack(); };
+  $("#packBack").onclick = () => openEditor(editing, null, editingNew);
+}
+function openTemplateEditor(){
+  const cats = [{id:"common", name:"Für alle Veranstaltungen", ic:"🎽"}, ...SPORTS];
+  $("#sheetInner").innerHTML = `
+    <div class="grab"></div>
+    <div class="sheet-head"><span style="width:70px"></span><h3>🎒 Grundausstattung</h3><button class="btn small primary" id="tplDone">Fertig</button></div>
+    ${cats.map(c=>`<h4 class="sec">${c.ic} ${esc(c.name)}</h4>
+      ${(PACK.tpl[c.id]||[]).map((it,i)=>`<div class="tpl-item"><span>${esc(it)}</span><button data-c="${c.id}" data-i="${i}" aria-label="Entfernen">×</button></div>`).join("")}
+      <div class="addrow"><input data-new="${c.id}" placeholder="Hinzufügen …"><button class="btn small" data-add="${c.id}">+</button></div>`).join("")}
+    <div class="actions" style="margin-top:14px"><button class="btn small" id="tplReset">Vorschlagsliste wiederherstellen</button></div>`;
+  const sheet = $("#sheetInner");
+  sheet.querySelectorAll(".tpl-item button").forEach(b => b.onclick = () => {
+    PACK.tpl[b.dataset.c].splice(+b.dataset.i, 1); PACK.save(); const y = $("#sheet").scrollTop; openTemplateEditor(); $("#sheet").scrollTop = y;
+  });
+  const add = c => {
+    const inp = sheet.querySelector(`[data-new="${c}"]`), v = inp.value.trim(); if(!v) return;
+    (PACK.tpl[c] ||= []); if(!PACK.tpl[c].includes(v)) PACK.tpl[c].push(v);
+    PACK.save(); const y = $("#sheet").scrollTop; openTemplateEditor(); $("#sheet").scrollTop = y;
+    setTimeout(()=>{ const n = $("#sheetInner").querySelector(`[data-new="${c}"]`); n && n.focus(); }, 50);
+  };
+  sheet.querySelectorAll("[data-add]").forEach(b => b.onclick = () => add(b.dataset.add));
+  sheet.querySelectorAll("[data-new]").forEach(i => i.onkeydown = ev => { if(ev.key==="Enter"){ ev.preventDefault(); add(i.dataset.new); } });
+  $("#tplReset").onclick = () => { PACK.tpl = JSON.parse(JSON.stringify(PACK_DEFAULT)); PACK.save(); openTemplateEditor(); toast("Vorschlagsliste wiederhergestellt"); };
+  $("#tplDone").onclick = () => { closeEditor(); render(); };
+  $("#backdrop").classList.add("open"); $("#sheet").classList.add("open");
 }
 function closeEditor(){ $("#backdrop").classList.remove("open"); $("#sheet").classList.remove("open"); }
 $("#backdrop").onclick = closeEditor;
