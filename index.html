@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Sportticker">
+<meta name="theme-color" content="#ff5a1f">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" type="image/png" href="icon-192.png">
+<title>Mein Sportticker</title>
+<style>
+:root{
+  --bg:#f4f5f7; --card:#ffffff; --text:#14171c; --muted:#6b7280; --line:#e5e7eb;
+  --accent:#ff5a1f; --accent-soft:#ffe9e0;
+  --watch:#2563eb; --watch-soft:#e0eaff;
+  --reg:#16a34a; --reg-soft:#dcfce7;
+  --done:#6b7280; --done-soft:#eceef1;
+  --warn:#b45309; --warn-soft:#fef3c7;
+  --radius:16px;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#0e1116; --card:#181c23; --text:#eef0f3; --muted:#9aa3af; --line:#2a303a;
+    --accent:#ff6b35; --accent-soft:#3a2219;
+    --watch:#7aa7ff; --watch-soft:#1c2a47;
+    --reg:#4ade80; --reg-soft:#173323;
+    --done:#9aa3af; --done-soft:#262b33;
+    --warn:#fbbf24; --warn-soft:#3a2e12;
+  }
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--text);
+  font:16px/1.4 -apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,sans-serif}
+button,input,select,textarea{font:inherit;color:inherit}
+.app{max-width:640px;margin:0 auto;min-height:100vh;
+  padding:calc(env(safe-area-inset-top) + 12px) 16px calc(env(safe-area-inset-bottom) + 96px)}
+header{display:flex;align-items:center;justify-content:space-between;margin:4px 0 14px}
+header h1{font-size:26px;margin:0;letter-spacing:-.02em}
+.sub{color:var(--muted);font-size:13px}
+.btn{border:0;border-radius:12px;padding:10px 14px;background:var(--card);cursor:pointer;
+  box-shadow:0 0 0 1px var(--line) inset}
+.btn.primary{background:var(--accent);color:#fff;box-shadow:none;font-weight:600}
+.btn.small{padding:7px 11px;font-size:14px}
+.btn.danger{color:#dc2626}
+.add-btn{width:44px;height:44px;border-radius:50%;font-size:26px;line-height:44px;padding:0;
+  background:var(--accent);color:#fff;border:0;cursor:pointer;font-weight:300}
+.chips{display:flex;gap:8px;overflow-x:auto;margin:0 -16px 14px;padding:0 16px;scrollbar-width:none}
+.chip{flex:none;border:0;border-radius:999px;padding:7px 13px;font-size:14px;background:var(--card);
+  box-shadow:0 0 0 1px var(--line) inset;cursor:pointer}
+.chip.on{background:var(--text);color:var(--bg);box-shadow:none}
+h2{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:22px 4px 8px;font-weight:600}
+.notice{display:flex;gap:10px;align-items:flex-start;background:var(--warn-soft);color:var(--text);
+  border-radius:14px;padding:11px 13px;margin-bottom:8px;cursor:pointer}
+.notice b{color:var(--warn)}
+.card{display:flex;gap:12px;background:var(--card);border-radius:var(--radius);padding:12px;margin-bottom:10px;
+  box-shadow:0 1px 0 var(--line);cursor:pointer}
+.date{flex:none;width:52px;text-align:center;border-radius:12px;background:var(--accent-soft);padding:6px 0}
+.date .d{font-size:22px;font-weight:700;line-height:1.1}
+.date .m{font-size:12px;text-transform:uppercase;color:var(--accent);font-weight:600}
+.date.past{background:var(--done-soft)} .date.past .m{color:var(--muted)}
+.body{flex:1;min-width:0}
+.title{font-weight:600;font-size:16px;margin:1px 0 2px;overflow:hidden;text-overflow:ellipsis}
+.meta{color:var(--muted);font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row{display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap}
+.pill{font-size:12px;font-weight:600;border-radius:999px;padding:3px 9px}
+.pill.watch{background:var(--watch-soft);color:var(--watch)}
+.pill.reg{background:var(--reg-soft);color:var(--reg)}
+.pill.done{background:var(--done-soft);color:var(--done)}
+.pill.count{background:transparent;color:var(--muted);font-weight:500;padding-left:0}
+a.link{font-size:13px;color:var(--accent);text-decoration:none;font-weight:600;margin-left:auto}
+.empty{text-align:center;color:var(--muted);padding:40px 20px}
+.empty .big{font-size:40px}
+/* Kalender */
+.cal{background:var(--card);border-radius:var(--radius);padding:12px;box-shadow:0 1px 0 var(--line)}
+.cal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.cal-head b{font-size:17px}
+.nav{border:0;background:none;font-size:22px;width:40px;height:36px;cursor:pointer;color:var(--accent)}
+.grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;text-align:center}
+.wd{font-size:11px;color:var(--muted);padding:4px 0;font-weight:600}
+.day{aspect-ratio:1/1;border-radius:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  cursor:pointer;font-size:15px;position:relative;border:0;background:none}
+.day.out{color:var(--muted);opacity:.45}
+.day.today{color:var(--accent);font-weight:700}
+.day.sel{background:var(--text);color:var(--bg)}
+.dots{display:flex;gap:3px;height:6px;margin-top:3px}
+.dot{width:6px;height:6px;border-radius:50%}
+.dot.watch{background:var(--watch)} .dot.reg{background:var(--reg)} .dot.done{background:var(--done)}
+.legend{display:flex;gap:14px;justify-content:center;font-size:12px;color:var(--muted);margin-top:10px}
+.legend span{display:flex;align-items:center;gap:5px}
+/* Tabbar */
+.tabbar{position:fixed;left:0;right:0;bottom:0;background:color-mix(in srgb,var(--card) 92%,transparent);
+  backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-top:1px solid var(--line);
+  display:flex;justify-content:center;padding:6px 8px calc(env(safe-area-inset-bottom) + 6px);z-index:5}
+.tabbar .inner{display:flex;max-width:640px;width:100%}
+.tab{flex:1;border:0;background:none;padding:6px 0;font-size:11px;color:var(--muted);cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px}
+.tab .ic{font-size:21px;line-height:1}
+.tab.on{color:var(--accent);font-weight:600}
+/* Sheet */
+.backdrop{position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:10;display:none}
+.backdrop.open{display:block}
+.sheet{position:fixed;left:0;right:0;bottom:0;max-height:92vh;overflow-y:auto;background:var(--bg);
+  border-radius:20px 20px 0 0;z-index:11;transform:translateY(100%);transition:transform .25s ease;
+  padding:10px 16px calc(env(safe-area-inset-bottom) + 20px)}
+.sheet.open{transform:none}
+.sheet .inner{max-width:640px;margin:0 auto}
+.grab{width:40px;height:5px;border-radius:3px;background:var(--line);margin:0 auto 10px}
+.sheet-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.sheet-head h3{margin:0;font-size:18px}
+.field{display:block;margin-bottom:12px}
+.field>span{display:block;font-size:13px;color:var(--muted);margin:0 2px 5px}
+.field input,.field select,.field textarea{width:100%;border:0;border-radius:12px;padding:12px;background:var(--card);
+  box-shadow:0 0 0 1px var(--line) inset;font-size:16px;-webkit-appearance:none;appearance:none}
+.field textarea{min-height:70px;resize:vertical}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.seg{display:flex;background:var(--card);border-radius:12px;padding:3px;box-shadow:0 0 0 1px var(--line) inset}
+.seg button{flex:1;border:0;background:none;border-radius:10px;padding:9px 4px;font-size:14px;cursor:pointer}
+.seg button.on.watch{background:var(--watch-soft);color:var(--watch);font-weight:600}
+.seg button.on.reg{background:var(--reg-soft);color:var(--reg);font-weight:600}
+.seg button.on.done{background:var(--done-soft);color:var(--done);font-weight:600}
+.actions{display:flex;gap:10px;margin-top:6px}
+.actions .btn{flex:1}
+.hint{font-size:12px;color:var(--muted);margin:-4px 2px 12px}
+.toast{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 84px);transform:translateX(-50%);
+  background:var(--text);color:var(--bg);padding:10px 16px;border-radius:12px;font-size:14px;z-index:20;
+  opacity:0;pointer-events:none;transition:opacity .2s;max-width:90vw;text-align:center}
+.toast.show{opacity:1}
+.syncnote{font-size:12px;color:var(--muted);text-align:center;margin-top:18px}
+.info{background:var(--card);border-radius:var(--radius);padding:14px;margin-bottom:10px;box-shadow:0 1px 0 var(--line);font-size:14px}
+.info p{margin:6px 0}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div>
+      <h1>Mein Sportticker</h1>
+      <div class="sub" id="headSub"></div>
+    </div>
+    <button class="add-btn" id="addBtn" aria-label="Veranstaltung hinzufügen">+</button>
+  </header>
+  <main id="view"></main>
+  <div class="syncnote" id="syncNote"></div>
+</div>
+
+<nav class="tabbar"><div class="inner" id="tabs"></div></nav>
+
+<div class="backdrop" id="backdrop"></div>
+<div class="sheet" id="sheet"><div class="inner" id="sheetInner"></div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* =========================================================
+   Mein Sportticker
+   Aufbau: Datenspeicher (STORE) + Module (MODULES).
+   Neue Funktionen = neues Modul im MODULES-Array.
+   ========================================================= */
+
+const SPORTS = [
+  {id:"lauf", name:"Laufen", ic:"🏃"},
+  {id:"rad", name:"Radfahren", ic:"🚴"},
+  {id:"tri", name:"Triathlon", ic:"🏅"},
+  {id:"schwimm", name:"Schwimmen", ic:"🏊"},
+  {id:"trail", name:"Trail / Berg", ic:"⛰️"},
+  {id:"sonst", name:"Sonstiges", ic:"🎽"}
+];
+const STATUS = {
+  watch:{name:"Beobachtet", cls:"watch"},
+  reg:{name:"Angemeldet", cls:"reg"},
+  done:{name:"Teilgenommen", cls:"done"}
+};
+const REMIND = [
+  {v:0,n:"Keine"},{v:1,n:"1 Tag vorher"},{v:3,n:"3 Tage vorher"},
+  {v:7,n:"1 Woche vorher"},{v:14,n:"2 Wochen vorher"},{v:30,n:"1 Monat vorher"}
+];
+const MONTHS = ["Januar","Februar","März","April","Mai","Juni","Juli","August","September","Oktober","November","Dezember"];
+const MON_SHORT = ["Jan","Feb","Mär","Apr","Mai","Jun","Jul","Aug","Sep","Okt","Nov","Dez"];
+const WD = ["Mo","Di","Mi","Do","Fr","Sa","So"];
+const WD_LONG = ["Sonntag","Montag","Dienstag","Mittwoch","Donnerstag","Freitag","Samstag"];
+
+/* ---------- Hilfsfunktionen ---------- */
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const pad = n => String(n).padStart(2,"0");
+const ymd = d => d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate());
+const parse = s => { const [y,m,d] = s.split("-").map(Number); return new Date(y,m-1,d); };
+const todayStr = () => ymd(new Date());
+const daysUntil = s => Math.round((parse(s) - parse(todayStr())) / 86400000);
+const sportOf = id => SPORTS.find(s => s.id === id) || SPORTS[SPORTS.length-1];
+const fmtLong = s => { const d = parse(s); return WD_LONG[d.getDay()]+", "+d.getDate()+". "+MONTHS[d.getMonth()]+" "+d.getFullYear(); };
+const fmtShort = s => { const d = parse(s); return d.getDate()+". "+MON_SHORT[d.getMonth()]; };
+const relDays = n => n === 0 ? "heute" : n === 1 ? "morgen" : n < 0 ? "vor "+(-n)+" Tagen" : "in "+n+" Tagen";
+const safeUrl = u => { if(!u) return ""; let x = u.trim(); if(!/^https?:\/\//i.test(x)) x = "https://"+x; try{ new URL(x); return x; }catch{ return ""; } };
+const newId = () => "e"+Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+
+function toast(msg){
+  const t = $("#toast"); t.textContent = msg; t.classList.add("show");
+  clearTimeout(toast._t); toast._t = setTimeout(()=>t.classList.remove("show"), 2600);
+}
+
+/* ---------- Datenspeicher ----------
+   Die Einträge liegen im Speicher dieses iPhones (Safari / Home-Bildschirm-App). */
+const LS_KEY = "sportticker.events.v1";
+const STORE = {
+  events: [],
+  ok: true,
+  listeners: [],
+  onChange(fn){ this.listeners.push(fn); },
+  emit(){ this.listeners.forEach(fn => fn()); },
+  load(){
+    try{ const r = localStorage.getItem(LS_KEY); this.events = r ? (JSON.parse(r) || []) : []; }
+    catch{ this.ok = false; }
+  },
+  persist(){
+    try{ localStorage.setItem(LS_KEY, JSON.stringify(this.events)); this.ok = true; }
+    catch{ this.ok = false; toast("Speichern fehlgeschlagen – bitte Sicherung erstellen."); }
+  },
+  init(){
+    this.load(); this.emit();
+    // Safari bitten, die Daten dauerhaft zu behalten
+    try{ navigator.storage && navigator.storage.persist && navigator.storage.persist(); }catch{}
+  },
+  save(ev){
+    const i = this.events.findIndex(e=>e.id===ev.id);
+    if(i>=0) this.events[i] = ev; else this.events.push(ev);
+    this.persist(); this.emit();
+  },
+  remove(id){
+    this.events = this.events.filter(e=>e.id!==id);
+    this.persist(); this.emit();
+  },
+  importList(list){
+    let added = 0, updated = 0;
+    for(const e of list){
+      if(!e || !e.id || !e.title || !e.date) continue;
+      const i = this.events.findIndex(x=>x.id===e.id);
+      if(i>=0){ this.events[i] = e; updated++; } else { this.events.push(e); added++; }
+    }
+    this.persist(); this.emit();
+    return {added, updated};
+  }
+};
+
+/* ---------- Zustand ---------- */
+const UI = {
+  tab: "overview",
+  filter: "all",
+  calMonth: (()=>{ const d=new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); })(),
+  calSel: todayStr()
+};
+
+const sorted = () => [...STORE.events].sort((a,b)=> (a.date+(a.time||"")).localeCompare(b.date+(b.time||"")));
+const filtered = list => UI.filter==="all" ? list : list.filter(e=>e.status===UI.filter);
+
+/* ---------- Hinweise / Erinnerungen ---------- */
+function getNotices(){
+  const out = [];
+  for(const e of STORE.events){
+    const n = daysUntil(e.date);
+    if(e.status!=="done" && n>=0 && e.remind>0 && n<=e.remind){
+      out.push({e, sort:n, html:`<b>${esc(e.title)}</b> ist ${relDays(n)} (${fmtShort(e.date)}).`});
+    }
+    if(e.status==="watch" && e.deadline){
+      const dn = daysUntil(e.deadline);
+      if(dn>=0 && dn<=14){
+        out.push({e, sort:dn-0.5, html:`Anmeldeschluss für <b>${esc(e.title)}</b> ist ${relDays(dn)} (${fmtShort(e.deadline)}).`});
+      }
+    }
+  }
+  return out.sort((a,b)=>a.sort-b.sort);
+}
+
+/* ---------- Darstellung: Eintragskarte ---------- */
+function cardHTML(e){
+  const d = parse(e.date), n = daysUntil(e.date), s = sportOf(e.sport), st = STATUS[e.status]||STATUS.watch;
+  const url = safeUrl(e.url);
+  const meta = [e.time ? e.time+" Uhr" : "", e.location, e.distance].filter(Boolean).map(esc).join(" · ");
+  return `<div class="card" data-id="${esc(e.id)}">
+    <div class="date ${n<0?"past":""}"><div class="d">${d.getDate()}</div><div class="m">${MON_SHORT[d.getMonth()]}</div></div>
+    <div class="body">
+      <div class="title">${s.ic} ${esc(e.title)}</div>
+      <div class="meta">${meta || esc(s.name)}</div>
+      <div class="row">
+        <span class="pill ${st.cls}">${st.name}</span>
+        ${n>=0 ? `<span class="pill count">${relDays(n)}</span>` : ""}
+        ${url ? `<a class="link" href="${esc(url)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">Zur Website ↗</a>` : ""}
+      </div>
+    </div>
+  </div>`;
+}
+function bindCards(root){
+  root.querySelectorAll(".card[data-id]").forEach(c => c.onclick = () => openEditor(STORE.events.find(e=>e.id===c.dataset.id)));
+  root.querySelectorAll(".notice[data-id]").forEach(c => c.onclick = () => openEditor(STORE.events.find(e=>e.id===c.dataset.id)));
+}
+function chipsHTML(){
+  const opts = [["all","Alle"],["reg","Angemeldet"],["watch","Beobachtet"],["done","Teilgenommen"]];
+  return `<div class="chips">${opts.map(([k,n])=>`<button class="chip ${UI.filter===k?"on":""}" data-f="${k}">${n}</button>`).join("")}</div>`;
+}
+function bindChips(root){
+  root.querySelectorAll(".chip[data-f]").forEach(b => b.onclick = () => { UI.filter = b.dataset.f; render(); });
+}
+
+/* =========================================================
+   MODULE – hier können später weitere Funktionen ergänzt werden
+   (z. B. Ergebnisse, Trainingsplan, Packliste, Kosten).
+   ========================================================= */
+const MODULES = [
+  {
+    id:"overview", name:"Übersicht", ic:"🏁",
+    render(root){
+      const all = sorted();
+      const notices = getNotices();
+      const upcoming = filtered(all.filter(e=>daysUntil(e.date)>=0));
+      const past = filtered(all.filter(e=>daysUntil(e.date)<0)).reverse();
+      if(!all.length){
+        root.innerHTML = `<div class="empty"><div class="big">🏃</div><p><b>Noch keine Veranstaltungen.</b></p>
+          <p>Tippe auf <b>+</b>, um deine erste Veranstaltung einzutragen.</p></div>`;
+        return;
+      }
+      root.innerHTML = `
+        ${notices.length ? `<h2>Hinweise</h2>${notices.map(x=>`<div class="notice" data-id="${esc(x.e.id)}">🔔<div>${x.html}</div></div>`).join("")}` : ""}
+        ${chipsHTML()}
+        <h2>Demnächst</h2>
+        ${upcoming.length ? upcoming.map(cardHTML).join("") : `<div class="empty" style="padding:16px">Keine kommenden Veranstaltungen.</div>`}
+        ${past.length ? `<h2>Vergangen</h2>${past.map(cardHTML).join("")}` : ""}`;
+      bindChips(root); bindCards(root);
+    }
+  },
+  {
+    id:"calendar", name:"Kalender", ic:"📅",
+    render(root){
+      const m = UI.calMonth, y = m.getFullYear(), mo = m.getMonth();
+      const first = new Date(y, mo, 1);
+      const offset = (first.getDay()+6)%7;
+      const start = new Date(y, mo, 1-offset);
+      const byDay = {};
+      for(const e of STORE.events){ (byDay[e.date] ||= []).push(e); }
+      const t = todayStr();
+      let cells = "";
+      for(let i=0;i<42;i++){
+        const d = new Date(start.getFullYear(), start.getMonth(), start.getDate()+i);
+        const k = ymd(d), evs = byDay[k] || [];
+        const cls = ["day", d.getMonth()!==mo?"out":"", k===t?"today":"", k===UI.calSel?"sel":""].join(" ");
+        cells += `<button class="${cls}" data-day="${k}">${d.getDate()}
+          <span class="dots">${evs.slice(0,3).map(e=>`<span class="dot ${(STATUS[e.status]||STATUS.watch).cls}"></span>`).join("")}</span></button>`;
+      }
+      const dayEvents = sorted().filter(e=>e.date===UI.calSel);
+      root.innerHTML = `
+        <div class="cal">
+          <div class="cal-head">
+            <button class="nav" id="prevM" aria-label="Vorheriger Monat">‹</button>
+            <b>${MONTHS[mo]} ${y}</b>
+            <button class="nav" id="nextM" aria-label="Nächster Monat">›</button>
+          </div>
+          <div class="grid">${WD.map(w=>`<div class="wd">${w}</div>`).join("")}${cells}</div>
+          <div class="legend"><span><i class="dot reg"></i>Angemeldet</span><span><i class="dot watch"></i>Beobachtet</span><span><i class="dot done"></i>Teilgenommen</span></div>
+        </div>
+        <h2>${fmtLong(UI.calSel)}</h2>
+        ${dayEvents.length ? dayEvents.map(cardHTML).join("") :
+          `<div class="empty" style="padding:16px">Keine Veranstaltung an diesem Tag.<br><br><button class="btn small" id="addHere">+ Hier eintragen</button></div>`}`;
+      $("#prevM").onclick = () => { UI.calMonth = new Date(y, mo-1, 1); render(); };
+      $("#nextM").onclick = () => { UI.calMonth = new Date(y, mo+1, 1); render(); };
+      root.querySelectorAll("[data-day]").forEach(b => b.onclick = () => {
+        UI.calSel = b.dataset.day;
+        const d = parse(UI.calSel);
+        if(d.getMonth()!==mo) UI.calMonth = new Date(d.getFullYear(), d.getMonth(), 1);
+        render();
+      });
+      const ah = $("#addHere"); if(ah) ah.onclick = () => openEditor(null, UI.calSel);
+      bindCards(root);
+    }
+  },
+  {
+    id:"more", name:"Mehr", ic:"⚙️",
+    render(root){
+      const n = STORE.events.length;
+      root.innerHTML = `
+        <h2>Benachrichtigungen</h2>
+        <div class="info">
+          <p>🔔 <b>In der App:</b> Unter „Übersicht“ erscheinen Hinweise, sobald eine Veranstaltung in deinem Erinnerungszeitraum liegt oder ein Anmeldeschluss naht.</p>
+          <p>📲 <b>Als echte iPhone-Mitteilung:</b> Öffne eine Veranstaltung und tippe auf „In iPhone-Kalender übernehmen“, dann auf „Hinzufügen“. Deine Erinnerung ist schon eingestellt – das iPhone meldet sich zuverlässig, auch wenn die App geschlossen ist.</p>
+          <div class="actions"><button class="btn small" id="exportAll" ${n?"":"disabled"}>Alle kommenden in Kalender exportieren</button></div>
+        </div>
+        <h2>Auf den Home-Bildschirm</h2>
+        <div class="info">
+          <p>In Safari unten auf <b>Teilen</b> ⬆️ tippen → <b>„Zum Home-Bildschirm“</b>. Danach startet „Mein Sportticker“ wie eine App.</p>
+        </div>
+        <h2>Daten &amp; Sicherung</h2>
+        <div class="info">
+          <p>📱 Deine Einträge sind auf diesem iPhone gespeichert. ${n} Veranstaltung${n===1?"":"en"} vorhanden.</p>
+          <p>Erstelle ab und zu eine Sicherung – z. B. in die Notizen-App einfügen.</p>
+          <div class="actions"><button class="btn small" id="backup" ${n?"":"disabled"}>Sicherung kopieren</button></div>
+        </div>
+        <div class="info">
+          <p><b>Sicherung einspielen</b> – kopierten Text hier einfügen:</p>
+          <label class="field" style="margin:8px 0"><textarea id="importText" placeholder="[ { … } ]"></textarea></label>
+          <div class="actions"><button class="btn small" id="importBtn">Importieren</button></div>
+        </div>
+        <div class="syncnote">Mein Sportticker · Version 2</div>`;
+      const ex = $("#exportAll"); if(ex) ex.onclick = () => {
+        const list = STORE.events.filter(e=>daysUntil(e.date)>=0 && e.status!=="done");
+        if(!list.length) return toast("Keine kommenden Veranstaltungen.");
+        saveICS(list, "sportticker.ics");
+      };
+      $("#importBtn").onclick = () => {
+        const raw = $("#importText").value.trim();
+        if(!raw) return toast("Bitte zuerst die Sicherung einfügen.");
+        try{
+          const list = JSON.parse(raw);
+          if(!Array.isArray(list)) throw 0;
+          const r = STORE.importList(list);
+          toast(`${r.added} neu, ${r.updated} aktualisiert.`);
+        }catch{ toast("Das ist keine gültige Sicherung."); }
+      };
+      const bk = $("#backup"); if(bk) bk.onclick = async () => {
+        try{ await navigator.clipboard.writeText(JSON.stringify(STORE.events, null, 1)); toast("Sicherung in die Zwischenablage kopiert."); }
+        catch{ toast("Kopieren nicht möglich."); }
+      };
+    }
+  }
+];
+
+/* ---------- Kalenderdatei (.ics) mit Erinnerung ---------- */
+function icsEsc(s){ return String(s||"").replace(/\\/g,"\\\\").replace(/\n/g,"\\n").replace(/,/g,"\\,").replace(/;/g,"\\;"); }
+function icsDate(s){ return s.replace(/-/g,""); }
+function icsEvent(uid, title, date, time, durH, desc, loc, url, remindDays){
+  const L = ["BEGIN:VEVENT","UID:"+uid+"@sportkalender",
+    "DTSTAMP:"+new Date().toISOString().replace(/[-:]/g,"").replace(/\.\d+/,"")];
+  if(time){
+    const [h,mi] = time.split(":").map(Number);
+    const st = new Date(...date.split("-").map((v,i)=>i===1?v-1:+v), h, mi);
+    const en = new Date(st.getTime()+durH*3600000);
+    const f = d => ymd(d).replace(/-/g,"")+"T"+pad(d.getHours())+pad(d.getMinutes())+"00";
+    L.push("DTSTART:"+f(st),"DTEND:"+f(en));
+  }else{
+    const nx = parse(date); nx.setDate(nx.getDate()+1);
+    L.push("DTSTART;VALUE=DATE:"+icsDate(date),"DTEND;VALUE=DATE:"+icsDate(ymd(nx)));
+  }
+  L.push("SUMMARY:"+icsEsc(title));
+  if(loc) L.push("LOCATION:"+icsEsc(loc));
+  if(url) L.push("URL:"+url);
+  if(desc || url) L.push("DESCRIPTION:"+icsEsc([desc, url].filter(Boolean).join("\n")));
+  if(remindDays>0){
+    // bei ganztägig: Erinnerung um 9 Uhr am Tag X vorher
+    const trig = time ? "-P"+remindDays+"D" : "-P"+remindDays+"DT15H";
+    L.push("BEGIN:VALARM","ACTION:DISPLAY","DESCRIPTION:"+icsEsc(title),"TRIGGER:"+trig,"END:VALARM");
+  }
+  L.push("END:VEVENT");
+  return L;
+}
+function buildICS(list){
+  let L = ["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//Sportticker//DE","CALSCALE:GREGORIAN"];
+  for(const e of list){
+    const url = safeUrl(e.url);
+    const st = (STATUS[e.status]||STATUS.watch).name;
+    L = L.concat(icsEvent(e.id, sportOf(e.sport).ic+" "+e.title, e.date, e.time, 3,
+      "Status: "+st+(e.distance?"\nStrecke: "+e.distance:"")+(e.notes?"\n"+e.notes:""), e.location, url, e.remind||0));
+    if(e.status==="watch" && e.deadline && daysUntil(e.deadline)>=0){
+      L = L.concat(icsEvent(e.id+"-ddl", "Anmeldeschluss: "+e.title, e.deadline, "", 0, "Jetzt anmelden!", "", url, 2));
+    }
+  }
+  L.push("END:VCALENDAR");
+  return L.join("\r\n");
+}
+function saveICS(list, filename){
+  const data = buildICS(list);
+  // Safari öffnet .ics-Dateien direkt mit dem Dialog „Zum Kalender hinzufügen“
+  const blob = new Blob([data], {type:"text/calendar;charset=utf-8"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  if(!/iPhone|iPad|iPod/.test(navigator.userAgent)) a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url), 60000);
+}
+
+/* ---------- Editor (Bottom-Sheet) ---------- */
+let editing = null;
+function openEditor(ev, presetDate){
+  const isNew = !ev;
+  editing = ev ? {...ev} : {id:newId(), title:"", sport:"lauf", date:presetDate||todayStr(), time:"", location:"",
+    distance:"", url:"", status:"watch", remind:7, deadline:"", notes:""};
+  const e = editing;
+  $("#sheetInner").innerHTML = `
+    <div class="grab"></div>
+    <div class="sheet-head">
+      <button class="btn small" id="cancel">Abbrechen</button>
+      <h3>${isNew?"Neue Veranstaltung":"Veranstaltung"}</h3>
+      <button class="btn small primary" id="save">Sichern</button>
+    </div>
+    <label class="field"><span>Name der Veranstaltung</span><input id="f_title" value="${esc(e.title)}" placeholder="z. B. Berlin-Marathon"></label>
+    <div class="field"><span>Status</span>
+      <div class="seg" id="f_status">${Object.entries(STATUS).map(([k,s])=>`<button type="button" data-s="${k}" class="${s.cls} ${e.status===k?"on":""}">${s.name}</button>`).join("")}</div>
+    </div>
+    <div class="two">
+      <label class="field"><span>Datum</span><input type="date" id="f_date" value="${esc(e.date)}"></label>
+      <label class="field"><span>Startzeit (optional)</span><input type="time" id="f_time" value="${esc(e.time)}"></label>
+    </div>
+    <div class="two">
+      <label class="field"><span>Sportart</span><select id="f_sport">${SPORTS.map(s=>`<option value="${s.id}" ${e.sport===s.id?"selected":""}>${s.ic} ${s.name}</option>`).join("")}</select></label>
+      <label class="field"><span>Strecke / Distanz</span><input id="f_distance" value="${esc(e.distance)}" placeholder="z. B. 21,1 km"></label>
+    </div>
+    <label class="field"><span>Ort</span><input id="f_location" value="${esc(e.location)}" placeholder="z. B. Hamburg"></label>
+    <label class="field"><span>Link zur Veranstalter-Website</span><input type="url" inputmode="url" autocapitalize="off" id="f_url" value="${esc(e.url)}" placeholder="https://…"></label>
+    <div class="two">
+      <label class="field"><span>Erinnerung</span><select id="f_remind">${REMIND.map(r=>`<option value="${r.v}" ${+e.remind===r.v?"selected":""}>${r.n}</option>`).join("")}</select></label>
+      <label class="field"><span>Anmeldeschluss</span><input type="date" id="f_deadline" value="${esc(e.deadline)}"></label>
+    </div>
+    <div class="hint">Beim Status „Beobachtet“ wirst du 14 Tage vor dem Anmeldeschluss erinnert.</div>
+    <label class="field"><span>Notizen</span><textarea id="f_notes" placeholder="Startnummer, Anreise, Startgebühr …">${esc(e.notes)}</textarea></label>
+    ${safeUrl(e.url) && !isNew ? `<a class="btn" style="display:block;text-align:center;text-decoration:none;margin-bottom:10px" href="${esc(safeUrl(e.url))}" target="_blank" rel="noopener">Veranstalter-Website öffnen ↗</a>` : ""}
+    <div class="actions"><button class="btn" id="toCal">📲 In iPhone-Kalender übernehmen</button></div>
+    ${!isNew ? `<div class="actions" style="margin-top:10px"><button class="btn danger" id="del">Löschen</button></div>` : ""}
+    <div id="delConfirm"></div>`;
+  $("#f_status").querySelectorAll("button").forEach(b => b.onclick = () => {
+    e.status = b.dataset.s;
+    $("#f_status").querySelectorAll("button").forEach(x => x.classList.toggle("on", x===b));
+  });
+  $("#cancel").onclick = closeEditor;
+  $("#save").onclick = () => {
+    const v = readForm(); if(!v) return;
+    closeEditor(); STORE.save(v); toast("Gespeichert");
+  };
+  $("#toCal").onclick = () => { const v = readForm(); if(v) saveICS([v], (v.title||"veranstaltung").replace(/[^\wäöüÄÖÜß-]+/g,"_")+".ics"); };
+  const del = $("#del"); if(del) del.onclick = () => {
+    $("#delConfirm").innerHTML = `<div class="info" style="margin-top:10px">Wirklich löschen?
+      <div class="actions"><button class="btn small" id="dNo">Nein</button><button class="btn small danger" id="dYes">Ja, löschen</button></div></div>`;
+    $("#dNo").onclick = () => $("#delConfirm").innerHTML = "";
+    $("#dYes").onclick = () => { closeEditor(); STORE.remove(e.id); toast("Gelöscht"); };
+  };
+  $("#backdrop").classList.add("open"); $("#sheet").classList.add("open");
+  if(isNew) setTimeout(()=>$("#f_title").focus(), 250);
+}
+function readForm(){
+  const v = {...editing,
+    title: $("#f_title").value.trim(), date: $("#f_date").value, time: $("#f_time").value,
+    sport: $("#f_sport").value, distance: $("#f_distance").value.trim(), location: $("#f_location").value.trim(),
+    url: $("#f_url").value.trim(), remind: +$("#f_remind").value, deadline: $("#f_deadline").value,
+    notes: $("#f_notes").value.trim(), updated: Date.now()};
+  if(!v.title){ toast("Bitte einen Namen eingeben."); $("#f_title").focus(); return null; }
+  if(!v.date){ toast("Bitte ein Datum wählen."); return null; }
+  if(v.url && !safeUrl(v.url)){ toast("Der Link sieht nicht gültig aus."); return null; }
+  return v;
+}
+function closeEditor(){ $("#backdrop").classList.remove("open"); $("#sheet").classList.remove("open"); }
+$("#backdrop").onclick = closeEditor;
+$("#addBtn").onclick = () => openEditor(null, UI.tab==="calendar" ? UI.calSel : null);
+
+/* ---------- Haupt-Rendering ---------- */
+function render(){
+  $("#tabs").innerHTML = MODULES.map(m=>`<button class="tab ${UI.tab===m.id?"on":""}" data-t="${m.id}"><span class="ic">${m.ic}</span>${m.name}</button>`).join("");
+  $("#tabs").querySelectorAll(".tab").forEach(b => b.onclick = () => { UI.tab = b.dataset.t; render(); window.scrollTo(0,0); });
+  const reg = STORE.events.filter(e=>e.status==="reg" && daysUntil(e.date)>=0).length;
+  const watch = STORE.events.filter(e=>e.status==="watch" && daysUntil(e.date)>=0).length;
+  $("#headSub").textContent = STORE.events.length ? `${reg} angemeldet · ${watch} beobachtet` : "Deine Wettkämpfe im Blick";
+  const mod = MODULES.find(m=>m.id===UI.tab) || MODULES[0];
+  mod.render($("#view"));
+  $("#syncNote").textContent = STORE.ok ? "" : "Achtung: Speichern nicht möglich (Privater Modus?)";
+}
+STORE.onChange(render);
+render();
+STORE.init();
+if("serviceWorker" in navigator){ navigator.serviceWorker.register("sw.js").catch(()=>{}); }
+</script>
+</body>
+</html>
