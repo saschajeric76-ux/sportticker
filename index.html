@@ -100,6 +100,18 @@ a.link{font-size:13px;color:var(--accent);text-decoration:none;font-weight:600;m
   padding:calc(env(safe-area-inset-top) + 16px) 16px calc(env(safe-area-inset-bottom) + 16px)}
 .ticket-view img{max-width:100%;max-height:78vh;object-fit:contain;border-radius:8px}
 .ticket-view .tv-hint{font-size:13px;color:#666;text-align:center}
+.sugg-teaser{display:flex;align-items:center;gap:12px;background:linear-gradient(135deg,var(--accent-soft),var(--card));border-radius:16px;padding:13px 14px;margin:4px 0 6px;cursor:pointer;box-shadow:0 0 0 1px var(--line) inset}
+.sugg-teaser .big{font-size:26px}
+.sugg-teaser b{display:block}
+.sugg{background:var(--card);border-radius:16px;padding:12px;margin-bottom:10px;box-shadow:0 1px 0 var(--line)}
+.sugg .head{display:flex;gap:12px}
+.sugg .info{background:none;box-shadow:none;padding:0;margin:6px 0 0;font-size:13px;color:var(--muted)}
+.sugg .acts{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+.sugg .acts .btn{font-size:13px;padding:7px 11px;text-decoration:none;color:var(--text)}
+.sugg .acts .btn.primary{color:#fff}
+.pill.new{background:var(--accent);color:#fff}
+.pill.tbc{background:var(--warn-soft);color:var(--warn)}
+.pill.beta{background:var(--watch-soft);color:var(--watch);font-size:11px;vertical-align:middle;margin-left:6px}
 .hol-banner{background:var(--hol-soft);color:var(--hol);border-radius:12px;padding:9px 12px;margin:-2px 0 10px;font-size:14px;font-weight:600}
 .legend .hl{width:10px;height:10px;border-radius:3px;background:var(--hol-soft);box-shadow:0 0 0 1px var(--hol) inset;display:inline-block}
 .day.sel{background:var(--text);color:var(--bg)}
@@ -181,7 +193,7 @@ a.link{font-size:13px;color:var(--accent);text-decoration:none;font-weight:600;m
 <div class="app">
   <header>
     <div>
-      <h1>Mein Sportticker</h1>
+      <h1>Mein Sportticker<span id="betaBadge"></span></h1>
       <div class="sub" id="headSub"></div>
     </div>
     <button class="add-btn" id="addBtn" aria-label="Veranstaltung hinzufügen">+</button>
@@ -460,17 +472,24 @@ const MODULES = [
       const upcoming = filtered(all.filter(e=>daysUntil(endOf(e))>=0));
       const past = filtered(all.filter(e=>daysUntil(endOf(e))<0)).reverse();
       if(!all.length){
-        root.innerHTML = `<div class="empty"><div class="big">🏃</div><p><b>Noch keine Veranstaltungen.</b></p>
+        const sl0 = SUGG.list();
+        root.innerHTML = (sl0.length ? `<div class="sugg-teaser" id="suggTeaser"><span class="big">✨</span><div style="flex:1"><b>${sl0.length} Vorschläge für dich</b><span class="sub">Veranstaltungen in der Alpenregion</span></div><span style="font-size:20px;color:var(--muted)">›</span></div>` : "") + `<div class="empty"><div class="big">🏃</div><p><b>Noch keine Veranstaltungen.</b></p>
           <p>Tippe auf <b>+</b>, um deine erste Veranstaltung einzutragen.</p></div>`;
+        const st0 = $("#suggTeaser"); if(st0) st0.onclick = openSuggestions;
         return;
       }
+      const sl = SUGG.list(), sn = SUGG.newCount();
+      const teaser = sl.length ? `<div class="sugg-teaser" id="suggTeaser"><span class="big">✨</span><div style="flex:1"><b>${sl.length} Vorschläge für dich</b>
+        <span class="sub">${sn ? sn+" neu · " : ""}Veranstaltungen in der Alpenregion</span></div><span style="font-size:20px;color:var(--muted)">›</span></div>` : "";
       root.innerHTML = `
+        ${teaser}
         ${notices.length ? `<h2>Hinweise</h2>${notices.map(x=>`<div class="notice" data-id="${esc(x.e.id)}">${x.ic||"🔔"}<div>${x.html}</div></div>`).join("")}` : ""}
         ${chipsHTML()}
         <h2>Demnächst</h2>
         ${upcoming.length ? upcoming.map(cardHTML).join("") : `<div class="empty" style="padding:16px">Keine kommenden Veranstaltungen.</div>`}
         ${past.length ? `<h2>Vergangen</h2>${past.map(cardHTML).join("")}` : ""}`;
       bindChips(root); bindCards(root);
+      const st = $("#suggTeaser"); if(st) st.onclick = openSuggestions;
     }
   },
   {
@@ -605,6 +624,12 @@ const MODULES = [
           <p>📲 <b>Als echte iPhone-Mitteilung:</b> Öffne eine Veranstaltung und tippe auf „In iPhone-Kalender übernehmen“, dann auf „Hinzufügen“. Deine Erinnerung ist schon eingestellt – das iPhone meldet sich zuverlässig, auch wenn die App geschlossen ist.</p>
           <div class="actions"><button class="btn small" id="exportAll" ${n?"":"disabled"}>Alle kommenden in Kalender exportieren</button></div>
         </div>
+        <h2>Vorschläge</h2>
+        <div class="info">
+          <p>✨ Claude sucht jeden Sonntag nach neuen Veranstaltungen in der Alpenregion – über alle Sportarten.</p>
+          <div class="actions"><button class="btn small" id="suggToggle">${SUGG.enabled ? "Vorschläge ausblenden" : "Vorschläge anzeigen"}</button>
+            <button class="btn small" id="suggReset" ${SUGG.dismissed.size?"":"disabled"}>Ausgeblendete zurückholen (${SUGG.dismissed.size})</button></div>
+        </div>
         <h2>Neuigkeiten</h2>
         <div class="info">
           <p>✨ Was hat sich in den letzten Updates geändert?</p>
@@ -641,7 +666,7 @@ const MODULES = [
           <label class="field" style="margin:8px 0"><textarea id="importText" placeholder="[ { … } ]"></textarea></label>
           <div class="actions"><button class="btn small" id="importBtn">Importieren</button></div>
         </div>
-        <div class="syncnote">Mein Sportticker · Version ${APP_VERSION}</div>`;
+        <div class="syncnote">Mein Sportticker · Version ${APP_VERSION}${IS_PREVIEW?" · Vorabversion":""}</div>`;
       const ex = $("#exportAll"); if(ex) ex.onclick = () => {
         const list = STORE.events.filter(e=>daysUntil(endOf(e))>=0 && e.status!=="done");
         if(!list.length) return toast("Keine kommenden Veranstaltungen.");
@@ -661,6 +686,8 @@ const MODULES = [
       };
       $("#editTpl").onclick = openTemplateEditor;
       $("#whatsNew").onclick = () => showWhatsNew(0);
+      $("#suggToggle").onclick = () => { SUGG.enabled = !SUGG.enabled; try{ localStorage.setItem("sportticker.sugg.enabled", SUGG.enabled?"1":"0"); }catch{} render(); };
+      $("#suggReset").onclick = () => { SUGG.dismissed.clear(); SUGG.saveSets(); toast("Ausgeblendete Vorschläge sind wieder da"); render(); };
       $("#stateSel").onchange = ev => {
         HSTATE = ev.target.value; _hcache = {};
         try{ localStorage.setItem(STATE_KEY, HSTATE); }catch{}
@@ -1010,10 +1037,89 @@ async function showTicket(id){
   ov.querySelector("button").onclick = () => { ov.remove(); URL.revokeObjectURL(url); };
 }
 
+/* ---------- Vorschläge (wöchentlich von Claude recherchiert) ---------- */
+const SUGG = {
+  data:null, loaded:false,
+  dismissed: new Set((()=>{ try{ return JSON.parse(localStorage.getItem("sportticker.sugg.dismissed")||"[]"); }catch{ return []; } })()),
+  seen: new Set((()=>{ try{ return JSON.parse(localStorage.getItem("sportticker.sugg.seen")||"[]"); }catch{ return []; } })()),
+  enabled: (()=>{ try{ return localStorage.getItem("sportticker.sugg.enabled") !== "0"; }catch{ return true; } })(),
+  saveSets(){ try{ localStorage.setItem("sportticker.sugg.dismissed", JSON.stringify([...this.dismissed]));
+    localStorage.setItem("sportticker.sugg.seen", JSON.stringify([...this.seen])); }catch{} },
+  async load(){
+    try{
+      const r = await fetch("vorschlaege.json?t="+Date.now(), {cache:"no-store"});
+      if(r.ok) this.data = await r.json();
+    }catch{}
+    this.loaded = true; render();
+  },
+  list(){
+    if(!this.enabled || !this.data || !Array.isArray(this.data.items)) return [];
+    const taken = new Set(STORE.events.map(e=>e.fromSugg).filter(Boolean));
+    const t = todayStr();
+    return this.data.items.filter(x => x && x.id && x.title && x.date && (x.endDate||x.date) >= t && !this.dismissed.has(x.id) && !taken.has(x.id))
+      .sort((a,b)=>a.date.localeCompare(b.date));
+  },
+  newCount(){ return this.list().filter(x=>!this.seen.has(x.id)).length; }
+};
+function suggDate(x){
+  const e = {date:x.date, endDate:x.endDate||""};
+  if(x.dateStatus === "offen") return "ca. "+MONTHS[parse(x.date).getMonth()]+" "+parse(x.date).getFullYear();
+  return fmtRange(e)+" "+parse(x.date).getFullYear();
+}
+let suggFilter = "all";
+function openSuggestions(){
+  const all = SUGG.list();
+  const newIds = new Set(all.filter(x=>!SUGG.seen.has(x.id)).map(x=>x.id));
+  const sports = [...new Set(all.map(x=>x.sport))];
+  if(suggFilter!=="all" && !sports.includes(suggFilter)) suggFilter = "all";
+  const list = suggFilter==="all" ? all : all.filter(x=>x.sport===suggFilter);
+  const upd = SUGG.data && SUGG.data.updated ? fmtShort(SUGG.data.updated)+" "+SUGG.data.updated.slice(0,4) : "–";
+  $("#sheetInner").innerHTML = `
+    <div class="grab"></div>
+    <div class="sheet-head"><span style="width:70px"></span><h3>✨ Vorschläge${BETA()}</h3><button class="btn small primary" id="sgDone">Fertig</button></div>
+    <div class="sub" style="margin-bottom:10px">${esc(SUGG.data && SUGG.data.region || "")} · recherchiert von Claude · Stand ${upd}</div>
+    ${sports.length>1 ? `<div class="chips"><button class="chip ${suggFilter==="all"?"on":""}" data-sf="all">Alle</button>${sports.map(sp=>`<button class="chip ${suggFilter===sp?"on":""}" data-sf="${sp}">${sportOf(sp).ic} ${sportOf(sp).name}</button>`).join("")}</div>` : ""}
+    ${list.length ? list.map(x=>{
+      const d = parse(x.date), url = safeUrl(x.url);
+      return `<div class="sugg">
+        <div class="head"><div class="date"><div class="d">${x.dateStatus==="offen"?"?":d.getDate()}</div><div class="m">${MON_SHORT[d.getMonth()]}</div></div>
+        <div class="body"><div class="title">${sportOf(x.sport).ic} ${esc(x.title)}</div>
+          <div class="meta">${esc([suggDate(x), x.location].filter(Boolean).join(" · "))}</div>
+          <div class="row" style="margin-top:6px">${newIds.has(x.id)?`<span class="pill new">Neu</span>`:""}
+            ${x.dateStatus==="offen"?`<span class="pill tbc">Termin offen</span>`:x.dateStatus==="unbestätigt"?`<span class="pill tbc">Termin unbestätigt</span>`:""}
+            ${x.distance?`<span class="pill count">${esc(x.distance)}</span>`:""}</div></div></div>
+        ${x.info?`<p class="info">${esc(x.info)}</p>`:""}
+        <div class="acts"><button class="btn primary" data-watch="${esc(x.id)}">+ Beobachten</button>
+          ${url?`<a class="btn" href="${esc(url)}" target="_blank" rel="noopener">Website ↗</a>`:""}
+          <button class="btn" data-hide="${esc(x.id)}">Ausblenden</button></div>
+      </div>`;}).join("") : `<div class="empty">Gerade keine offenen Vorschläge.<br>Jeden Sonntag kommen neue dazu.</div>`}
+    <div class="hint" style="margin-top:8px">Die Vorschläge recherchiert Claude jeden Sonntag neu. Termine bitte vor der Anmeldung auf der Veranstalterseite prüfen.</div>`;
+  all.forEach(x=>SUGG.seen.add(x.id)); SUGG.saveSets();
+  const sh = $("#sheetInner");
+  sh.querySelectorAll("[data-sf]").forEach(b => b.onclick = () => { suggFilter = b.dataset.sf; openSuggestions(); });
+  sh.querySelectorAll("[data-watch]").forEach(b => b.onclick = () => {
+    const x = all.find(i=>i.id===b.dataset.watch); if(!x) return;
+    STORE.save({id:newId(), title:x.title, sport: SPORTS.some(s=>s.id===x.sport)?x.sport:"sonst", date:x.date, endDate:x.endDate||"", time:"",
+      location:x.location||"", stay:"", distance:x.distance||"", url:x.url||"", status:"watch", remind:7, deadline:x.deadline||"",
+      notes:[x.info, x.dateStatus==="offen"?"Achtung: Termin noch offen – Datum ist nur ein Platzhalter.":x.dateStatus==="unbestätigt"?"Termin noch nicht vom Veranstalter bestätigt.":""].filter(Boolean).join("\n"),
+      fee:0, paid:false, pack:[], packExtra:[], result:{}, fromSugg:x.id, updated:Date.now()});
+    toast("Zu deinen Veranstaltungen hinzugefügt"); openSuggestions();
+  });
+  sh.querySelectorAll("[data-hide]").forEach(b => b.onclick = () => { SUGG.dismissed.add(b.dataset.hide); SUGG.saveSets(); openSuggestions(); });
+  $("#sgDone").onclick = () => { closeEditor(); render(); };
+  $("#backdrop").classList.add("open"); $("#sheet").classList.add("open");
+}
+
 /* ---------- Was ist neu ---------- */
-const APP_VERSION = 6;
+const APP_VERSION = 7;
+const IS_PREVIEW = true; // Vorabversion – nach dem Testen auf false setzen
+const BETA = () => IS_PREVIEW ? `<span class="pill beta">Vorabversion</span>` : "";
 const SEEN_KEY = "sportticker.seenVersion";
 const CHANGELOG = [
+  {v:7, date:"14.11.2026", items:[
+    "✨ Vorschläge: Claude sucht jeden Sonntag nach neuen Veranstaltungen in der Alpenregion – Rad, Gravel/Bikepacking, Laufen, Trail, Triathlon und Wandern",
+    "➕ Mit einem Tipp auf „Beobachten“ landet ein Vorschlag direkt in deinen Veranstaltungen",
+    "⚙️ Unter Mehr → Vorschläge kannst du sie ausblenden oder Ausgeblendete zurückholen"]},
   {v:6, date:"14.11.2026", items:[
     "📍 Apple Karten: Veranstaltungsort und Unterkunft direkt in Karten zeigen oder die Route starten",
     "🛏 Neues Feld „Unterkunft“ für Hotel, Pension oder Campingplatz",
@@ -1034,8 +1140,9 @@ function showWhatsNew(sinceVersion){
     <div class="grab"></div>
     <div style="text-align:center;margin:6px 0 4px"><img src="icon-180.png" alt="" style="width:64px;height:64px;border-radius:15px"></div>
     <h3 style="text-align:center;margin:6px 0 2px;font-size:21px">Was ist neu?</h3>
-    <div class="sub" style="text-align:center;margin-bottom:12px">Mein Sportticker · Version ${APP_VERSION}</div>
-    ${list.map(c=>`<div class="info"><p class="sub" style="margin:0 0 4px">Version ${c.v} · ${c.date}</p>
+    <div class="sub" style="text-align:center;margin-bottom:12px">Mein Sportticker · Version ${APP_VERSION}${IS_PREVIEW?" (Vorabversion)":""}</div>
+    ${IS_PREVIEW && list.some(c=>c.v===APP_VERSION) ? `<div class="hol-banner" style="background:var(--watch-soft);color:var(--watch)">🧪 Das ist eine Vorabversion: Neue Funktionen werden noch getestet und können sich ändern.</div>` : ""}
+    ${list.map(c=>`<div class="info"><p class="sub" style="margin:0 0 4px">Version ${c.v}${IS_PREVIEW&&c.v===APP_VERSION?" (Vorabversion)":""} · ${c.date}</p>
       ${c.items.map(i=>`<p>${esc(i)}</p>`).join("")}</div>`).join("")}
     <div class="actions" style="margin-top:12px"><button class="btn primary" id="wnOk">Alles klar</button></div>`;
   $("#wnOk").onclick = closeEditor;
@@ -1055,6 +1162,7 @@ function checkWhatsNew(){
 
 /* ---------- Haupt-Rendering ---------- */
 function render(){
+  const bb = $("#betaBadge"); if(bb) bb.innerHTML = IS_PREVIEW ? `<span class="pill beta">Vorab</span>` : "";
   $("#tabs").innerHTML = MODULES.map(m=>`<button class="tab ${UI.tab===m.id?"on":""}" data-t="${m.id}"><span class="ic">${m.ic}</span>${m.name}</button>`).join("");
   $("#tabs").querySelectorAll(".tab").forEach(b => b.onclick = () => { UI.tab = b.dataset.t; render(); window.scrollTo(0,0); });
   const reg = STORE.events.filter(e=>e.status==="reg" && daysUntil(endOf(e))>=0).length;
@@ -1068,6 +1176,7 @@ STORE.onChange(render);
 render();
 STORE.init();
 setTimeout(checkWhatsNew, 400);
+SUGG.load();
 if("serviceWorker" in navigator){ navigator.serviceWorker.register("sw.js").catch(()=>{}); }
 </script>
 </body>
