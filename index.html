@@ -91,6 +91,15 @@ a.link{font-size:13px;color:var(--accent);text-decoration:none;font-weight:600;m
 .hol-list{margin-top:10px;border-top:1px solid var(--line);padding-top:8px;font-size:13px;color:var(--muted)}
 .hol-list div{display:flex;justify-content:space-between;padding:3px 2px}
 .hol-list b{color:var(--hol);font-weight:600}
+.maprow{display:flex;gap:8px;margin:-4px 0 14px;flex-wrap:wrap}
+.maprow .btn{text-decoration:none;color:var(--text);font-size:13px;padding:7px 11px}
+.pill.tix{border:0;background:var(--watch-soft);color:var(--watch);cursor:pointer;font:inherit;font-size:12px;font-weight:600}
+.ticket-box{display:flex;gap:12px;align-items:center;background:var(--card);border-radius:14px;padding:10px;box-shadow:0 0 0 1px var(--line) inset;margin-bottom:10px}
+.ticket-box .thumb{width:64px;height:64px;border-radius:10px;object-fit:cover;background:var(--bg);flex:none;display:flex;align-items:center;justify-content:center;font-size:28px}
+.ticket-view{position:fixed;inset:0;z-index:40;background:#fff;color:#111;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;
+  padding:calc(env(safe-area-inset-top) + 16px) 16px calc(env(safe-area-inset-bottom) + 16px)}
+.ticket-view img{max-width:100%;max-height:78vh;object-fit:contain;border-radius:8px}
+.ticket-view .tv-hint{font-size:13px;color:#666;text-align:center}
 .hol-banner{background:var(--hol-soft);color:var(--hol);border-radius:12px;padding:9px 12px;margin:-2px 0 10px;font-size:14px;font-weight:600}
 .legend .hl{width:10px;height:10px;border-radius:3px;background:var(--hol-soft);box-shadow:0 0 0 1px var(--hol) inset;display:inline-block}
 .day.sel{background:var(--text);color:var(--bg)}
@@ -416,6 +425,7 @@ function cardHTML(e){
       <div class="meta">${meta || esc(s.name)}</div>
       <div class="row">
         <span class="pill ${st.cls}">${st.name}</span>
+        ${e.hasTicket && ne>=0 ? `<button class="pill tix" data-ticket="${esc(e.id)}">🎟 Ticket</button>` : ""}
         ${e.result && e.result.time ? `<span class="pill res">⏱ ${esc(e.result.time)}</span>` : ""}
         ${e.fee>0 && !e.paid && e.status==="reg" ? `<span class="pill fee">💶 offen</span>` : ""}
         ${n>=0 ? `<span class="pill count">${relDays(n)}</span>` : ne>=0 ? `<span class="pill count">läuft – Tag ${1-n} von ${dayCount(e)}</span>` : ""}
@@ -425,6 +435,7 @@ function cardHTML(e){
   </div>`;
 }
 function bindCards(root){
+  root.querySelectorAll("[data-ticket]").forEach(b => b.onclick = ev => { ev.stopPropagation(); showTicket(b.dataset.ticket); });
   root.querySelectorAll(".card[data-id]").forEach(c => c.onclick = () => openEditor(STORE.events.find(e=>e.id===c.dataset.id)));
   root.querySelectorAll(".notice[data-id]").forEach(c => c.onclick = () => openEditor(STORE.events.find(e=>e.id===c.dataset.id)));
 }
@@ -622,7 +633,7 @@ const MODULES = [
         <h2>Daten &amp; Sicherung</h2>
         <div class="info">
           <p>📱 Deine Einträge sind auf diesem iPhone gespeichert. ${n} Veranstaltung${n===1?"":"en"} vorhanden.</p>
-          <p>Erstelle ab und zu eine Sicherung – z. B. in die Notizen-App einfügen.</p>
+          <p>Erstelle ab und zu eine Sicherung – z. B. in die Notizen-App einfügen. Gespeicherte Tickets sind nicht in der Sicherung enthalten.</p>
           <div class="actions"><button class="btn small" id="backup" ${n?"":"disabled"}>Sicherung kopieren</button></div>
         </div>
         <div class="info">
@@ -707,7 +718,7 @@ function buildICS(list){
     const url = safeUrl(e.url);
     const st = (STATUS[e.status]||STATUS.watch).name;
     L = L.concat(icsEvent(e.id, sportOf(e.sport).ic+" "+e.title, e.date, e.time, 3,
-      "Status: "+st+(e.distance?"\nStrecke: "+e.distance:"")+(e.notes?"\n"+e.notes:""), e.location, url, e.remind||0, endOf(e)));
+      "Status: "+st+(e.distance?"\nStrecke: "+e.distance:"")+(e.stay?"\nUnterkunft: "+e.stay:"")+(e.notes?"\n"+e.notes:""), e.location, url, e.remind||0, endOf(e)));
     if(e.status==="watch" && e.deadline && daysUntil(e.deadline)>=0){
       L = L.concat(icsEvent(e.id+"-ddl", "Anmeldeschluss: "+e.title, e.deadline, "", 0, "Jetzt anmelden!", "", url, 2));
     }
@@ -757,7 +768,10 @@ function openEditor(ev, presetDate, keepNew){
       <label class="field"><span>Sportart</span><select id="f_sport">${SPORTS.map(s=>`<option value="${s.id}" ${e.sport===s.id?"selected":""}>${s.ic} ${s.name}</option>`).join("")}</select></label>
       <label class="field"><span>Strecke / Distanz</span><input id="f_distance" value="${esc(e.distance)}" placeholder="z. B. 21,1 km"></label>
     </div>
-    <label class="field"><span>Ort</span><input id="f_location" value="${esc(e.location)}" placeholder="z. B. Hamburg"></label>
+    <label class="field"><span>Ort / Adresse</span><input id="f_location" value="${esc(e.location)}" placeholder="z. B. Hamburg, Rathausmarkt"></label>
+    <div class="maprow" id="locMaps">${mapButtons(e.location)}</div>
+    <label class="field"><span>Unterkunft (Name oder Adresse)</span><input id="f_stay" value="${esc(e.stay||"")}" placeholder="z. B. Hotel Alpenblick, Garmisch"></label>
+    <div class="maprow" id="stayMaps">${mapButtons(e.stay)}</div>
     <label class="field"><span>Link zur Veranstalter-Website</span><input type="url" inputmode="url" autocapitalize="off" id="f_url" value="${esc(e.url)}" placeholder="https://…"></label>
     <div class="two">
       <label class="field"><span>Erinnerung</span><select id="f_remind">${REMIND.map(r=>`<option value="${r.v}" ${+e.remind===r.v?"selected":""}>${r.n}</option>`).join("")}</select></label>
@@ -765,6 +779,9 @@ function openEditor(ev, presetDate, keepNew){
     </div>
     <div class="hint">Beim Status „Beobachtet“ wirst du 14 Tage vor dem Anmeldeschluss erinnert.</div>
     <label class="field"><span>Notizen</span><textarea id="f_notes" placeholder="Startnummer, Anreise, Unterkunft …">${esc(e.notes)}</textarea></label>
+    <h4 class="sec">🎟 Ticket / Startunterlagen</h4>
+    <div id="ticketArea"></div>
+    <input type="file" id="f_ticket" accept="image/*,application/pdf" style="display:none">
     <h4 class="sec">💶 Startgeld</h4>
     <div class="two">
       <label class="field"><span>Betrag (€)</span><input id="f_fee" inputmode="decimal" value="${e.fee ? String(e.fee).replace(".",",") : ""}" placeholder="z. B. 35"></label>
@@ -796,6 +813,24 @@ function openEditor(ev, presetDate, keepNew){
     $("#f_paid").querySelectorAll("button").forEach(x => x.classList.toggle("on", x===b));
   });
   $("#openPack").onclick = () => { editing = formValues(); openPack(); };
+  $("#f_sport").onchange = () => { const p = packProgress({...editing, sport: $("#f_sport").value}); $("#openPack").textContent = `Packliste öffnen · ${p.c} von ${p.n} gepackt`; };
+  $("#f_location").oninput = ev => $("#locMaps").innerHTML = mapButtons(ev.target.value.trim());
+  $("#f_stay").oninput = ev => $("#stayMaps").innerHTML = mapButtons(ev.target.value.trim());
+  renderTicketArea();
+  $("#f_ticket").onchange = async ev => {
+    const f = ev.target.files && ev.target.files[0]; ev.target.value = "";
+    if(!f) return;
+    try{
+      let blob = f, type = f.type;
+      if(type === "application/pdf"){ if(f.size > 15e6) return toast("Die PDF ist zu groß (max. 15 MB)."); }
+      else { blob = await compressImage(f); type = "image/jpeg"; }
+      await TICKETS.put(editing.id, {blob, type, name: f.name, added: Date.now()});
+      editing.hasTicket = true; editing.ticketType = type;
+      const stored = STORE.events.find(x=>x.id===editing.id);
+      if(stored) STORE.save({...stored, hasTicket:true, ticketType:type});
+      renderTicketArea(); toast("Ticket gespeichert");
+    }catch(err){ toast("Ticket konnte nicht gespeichert werden."); }
+  };
   $("#cancel").onclick = closeEditor;
   $("#save").onclick = () => {
     const v = readForm(); if(!v) return;
@@ -806,7 +841,7 @@ function openEditor(ev, presetDate, keepNew){
     $("#delConfirm").innerHTML = `<div class="info" style="margin-top:10px">Wirklich löschen?
       <div class="actions"><button class="btn small" id="dNo">Nein</button><button class="btn small danger" id="dYes">Ja, löschen</button></div></div>`;
     $("#dNo").onclick = () => $("#delConfirm").innerHTML = "";
-    $("#dYes").onclick = () => { closeEditor(); STORE.remove(e.id); toast("Gelöscht"); };
+    $("#dYes").onclick = () => { closeEditor(); STORE.remove(e.id); TICKETS.del(e.id); toast("Gelöscht"); };
   };
   $("#backdrop").classList.add("open"); $("#sheet").classList.add("open");
   if(isNew && !ev) setTimeout(()=>$("#f_title").focus(), 250);
@@ -815,6 +850,7 @@ function formValues(){
   const v = {...editing,
     title: $("#f_title").value.trim(), date: $("#f_date").value, time: $("#f_time").value, endDate: $("#f_end").value,
     sport: $("#f_sport").value, distance: $("#f_distance").value.trim(), location: $("#f_location").value.trim(),
+    stay: $("#f_stay").value.trim(),
     url: $("#f_url").value.trim(), remind: +$("#f_remind").value, deadline: $("#f_deadline").value,
     notes: $("#f_notes").value.trim(), updated: Date.now(),
     fee: parseMoney($("#f_fee").value), paid: !!editing.paid,
@@ -832,6 +868,33 @@ function readForm(){
   if(v.endDate === v.date) v.endDate = "";
   if(v.url && !safeUrl(v.url)){ toast("Der Link sieht nicht gültig aus."); return null; }
   return v;
+}
+async function renderTicketArea(){
+  const box = $("#ticketArea"); if(!box) return;
+  const e = editing;
+  const wallet = IS_IOS ? `<a class="btn small" href="shoebox://" style="text-decoration:none">💳 Wallet öffnen</a>` : "";
+  if(!e.hasTicket){
+    box.innerHTML = `<div class="maprow" style="margin-top:0"><button class="btn small" id="tAdd">+ Ticket hinzufügen</button>${wallet}</div>
+      <div class="hint">Foto, Screenshot oder PDF – z. B. der QR-Code aus der Anmeldebestätigung.</div>`;
+  }else{
+    let thumb = `<div class="thumb">📄</div>`;
+    if(e.ticketType !== "application/pdf"){
+      try{ const t = await TICKETS.get(e.id); if(t && t.blob){ const u = URL.createObjectURL(t.blob); thumb = `<img class="thumb" src="${u}" alt="">`; } }catch{}
+    }
+    if(!$("#ticketArea")) return;
+    box.innerHTML = `<div class="ticket-box">${thumb}<div style="flex:1"><b>Ticket gespeichert</b>
+        <div class="sub">${e.ticketType==="application/pdf"?"PDF":"Bild"} · nur auf diesem Gerät</div></div></div>
+      <div class="maprow" style="margin-top:0"><button class="btn small primary" id="tShow">🎟 Anzeigen</button>
+        <button class="btn small" id="tAdd">Ersetzen</button><button class="btn small danger" id="tDel">Entfernen</button>${wallet}</div>`;
+    $("#tShow").onclick = () => showTicket(e.id);
+    $("#tDel").onclick = async () => {
+      await TICKETS.del(e.id); e.hasTicket = false; e.ticketType = "";
+      const stored = STORE.events.find(x=>x.id===e.id);
+      if(stored) STORE.save({...stored, hasTicket:false, ticketType:""});
+      renderTicketArea(); toast("Ticket entfernt");
+    };
+  }
+  $("#tAdd").onclick = () => $("#f_ticket").click();
 }
 function openPack(){
   const e = editing;
@@ -897,10 +960,65 @@ function closeEditor(){ $("#backdrop").classList.remove("open"); $("#sheet").cla
 $("#backdrop").onclick = closeEditor;
 $("#addBtn").onclick = () => openEditor(null, UI.tab==="calendar" ? UI.calSel : null);
 
+/* ---------- Apple Karten ---------- */
+const IS_IOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform==="MacIntel" && navigator.maxTouchPoints>1);
+function mapsUrl(q, route){
+  const enc = encodeURIComponent(q);
+  if(IS_IOS) return route ? "https://maps.apple.com/?daddr="+enc : "https://maps.apple.com/?q="+enc;
+  return route ? "https://www.google.com/maps/dir/?api=1&destination="+enc : "https://www.google.com/maps/search/?api=1&query="+enc;
+}
+function mapButtons(q){
+  if(!q) return "";
+  return `<a class="btn small" href="${esc(mapsUrl(q))}" target="_blank" rel="noopener">📍 In Karten zeigen</a>
+          <a class="btn small" href="${esc(mapsUrl(q,true))}" target="_blank" rel="noopener">🧭 Route</a>`;
+}
+
+/* ---------- Tickets (auf dem Gerät, in IndexedDB) ---------- */
+const TICKETS = {
+  _db:null,
+  open(){ return this._db ||= new Promise((res,rej)=>{ const r = indexedDB.open("sportticker",1);
+    r.onupgradeneeded = () => r.result.createObjectStore("tickets"); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); },
+  async run(mode, fn){ const db = await this.open(); return new Promise((res,rej)=>{
+    const t = db.transaction("tickets", mode), req = fn(t.objectStore("tickets"));
+    t.oncomplete = () => res(req && req.result); t.onerror = () => rej(t.error); }); },
+  get(id){ return this.run("readonly", st=>st.get(id)); },
+  put(id, v){ return this.run("readwrite", st=>st.put(v, id)); },
+  del(id){ return this.run("readwrite", st=>st.delete(id)).catch(()=>{}); }
+};
+async function compressImage(file){
+  const url = URL.createObjectURL(file);
+  try{
+    const img = await new Promise((res,rej)=>{ const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = url; });
+    const sc = Math.min(1, 2000/Math.max(img.width, img.height));
+    const c = document.createElement("canvas"); c.width = Math.round(img.width*sc); c.height = Math.round(img.height*sc);
+    const g = c.getContext("2d"); g.fillStyle = "#fff"; g.fillRect(0,0,c.width,c.height); g.drawImage(img,0,0,c.width,c.height);
+    return await new Promise(res => c.toBlob(res, "image/jpeg", 0.9));
+  }finally{ URL.revokeObjectURL(url); }
+}
+async function showTicket(id){
+  let t = null; try{ t = await TICKETS.get(id); }catch{}
+  if(!t || !t.blob) return toast("Kein Ticket gespeichert.");
+  const url = URL.createObjectURL(t.blob);
+  if(t.type === "application/pdf"){
+    const a = document.createElement("a"); a.href = url; a.target = "_blank"; a.rel = "noopener";
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url), 120000); return;
+  }
+  const ov = document.createElement("div"); ov.className = "ticket-view";
+  ov.innerHTML = `<img src="${url}" alt="Ticket"><div class="tv-hint">Tipp: Bildschirm ganz hell stellen, damit der Code gut gescannt werden kann.</div>
+    <button class="btn primary" style="min-width:160px">Schließen</button>`;
+  document.body.appendChild(ov);
+  ov.querySelector("button").onclick = () => { ov.remove(); URL.revokeObjectURL(url); };
+}
+
 /* ---------- Was ist neu ---------- */
-const APP_VERSION = 5;
+const APP_VERSION = 6;
 const SEEN_KEY = "sportticker.seenVersion";
 const CHANGELOG = [
+  {v:6, date:"14.11.2026", items:[
+    "📍 Apple Karten: Veranstaltungsort und Unterkunft direkt in Karten zeigen oder die Route starten",
+    "🛏 Neues Feld „Unterkunft“ für Hotel, Pension oder Campingplatz",
+    "🎟 Ticket speichern: Foto, Screenshot oder PDF deiner Startunterlagen in der Veranstaltung ablegen und mit einem Tipp vorzeigen – auch ohne Internet",
+    "💳 Liegt dein Ticket schon in Apple Wallet, öffnet „Wallet öffnen“ die Wallet-App direkt"]},
   {v:5, date:"13.11.2026", items:[
     "🚵 Neue Sportart Gravel / Bikepacking – mit ausführlicher Packliste von Rahmentasche bis Schlafsack",
     "🥾 Neue Sportart Wandern – mit eigener Packliste",
