@@ -473,14 +473,14 @@ const MODULES = [
       const past = filtered(all.filter(e=>daysUntil(endOf(e))<0)).reverse();
       if(!all.length){
         const sl0 = SUGG.list();
-        root.innerHTML = (sl0.length ? `<div class="sugg-teaser" id="suggTeaser"><span class="big">✨</span><div style="flex:1"><b>${sl0.length} Vorschläge für dich</b><span class="sub">Veranstaltungen in der Alpenregion</span></div><span style="font-size:20px;color:var(--muted)">›</span></div>` : "") + `<div class="empty"><div class="big">🏃</div><p><b>Noch keine Veranstaltungen.</b></p>
+        root.innerHTML = (sl0.length ? `<div class="sugg-teaser" id="suggTeaser"><span class="big">✨</span><div style="flex:1"><b>${sl0.length} Vorschläge für dich</b><span class="sub">in Deutschland und den Alpen</span></div><span style="font-size:20px;color:var(--muted)">›</span></div>` : "") + `<div class="empty"><div class="big">🏃</div><p><b>Noch keine Veranstaltungen.</b></p>
           <p>Tippe auf <b>+</b>, um deine erste Veranstaltung einzutragen.</p></div>`;
         const st0 = $("#suggTeaser"); if(st0) st0.onclick = openSuggestions;
         return;
       }
       const sl = SUGG.list(), sn = SUGG.newCount();
       const teaser = sl.length ? `<div class="sugg-teaser" id="suggTeaser"><span class="big">✨</span><div style="flex:1"><b>${sl.length} Vorschläge für dich</b>
-        <span class="sub">${sn ? sn+" neu · " : ""}Veranstaltungen in der Alpenregion</span></div><span style="font-size:20px;color:var(--muted)">›</span></div>` : "";
+        <span class="sub">${sn ? sn+" neu · " : ""}in Deutschland und den Alpen</span></div><span style="font-size:20px;color:var(--muted)">›</span></div>` : "";
       root.innerHTML = `
         ${teaser}
         ${notices.length ? `<h2>Hinweise</h2>${notices.map(x=>`<div class="notice" data-id="${esc(x.e.id)}">${x.ic||"🔔"}<div>${x.html}</div></div>`).join("")}` : ""}
@@ -626,7 +626,7 @@ const MODULES = [
         </div>
         <h2>Vorschläge</h2>
         <div class="info">
-          <p>✨ Claude sucht jeden Sonntag nach neuen Veranstaltungen in der Alpenregion – über alle Sportarten.</p>
+          <p>✨ Claude sucht jeden Sonntag nach neuen Veranstaltungen in Deutschland und der Alpenregion – über alle Sportarten.</p>
           <div class="actions"><button class="btn small" id="suggToggle">${SUGG.enabled ? "Vorschläge ausblenden" : "Vorschläge anzeigen"}</button>
             <button class="btn small" id="suggReset" ${SUGG.dismissed.size?"":"disabled"}>Ausgeblendete zurückholen (${SUGG.dismissed.size})</button></div>
         </div>
@@ -1066,18 +1066,21 @@ function suggDate(x){
   if(x.dateStatus === "offen") return "ca. "+MONTHS[parse(x.date).getMonth()]+" "+parse(x.date).getFullYear();
   return fmtRange(e)+" "+parse(x.date).getFullYear();
 }
-let suggFilter = "all";
+let suggFilter = "all", suggArea = "all";
 function openSuggestions(){
   const all = SUGG.list();
   const newIds = new Set(all.filter(x=>!SUGG.seen.has(x.id)).map(x=>x.id));
   const sports = [...new Set(all.map(x=>x.sport))];
   if(suggFilter!=="all" && !sports.includes(suggFilter)) suggFilter = "all";
-  const list = suggFilter==="all" ? all : all.filter(x=>x.sport===suggFilter);
+  const areas = [...new Set(all.map(x=>x.area).filter(Boolean))];
+  if(suggArea!=="all" && !areas.includes(suggArea)) suggArea = "all";
+  const list = all.filter(x => (suggFilter==="all" || x.sport===suggFilter) && (suggArea==="all" || x.area===suggArea));
   const upd = SUGG.data && SUGG.data.updated ? fmtShort(SUGG.data.updated)+" "+SUGG.data.updated.slice(0,4) : "–";
   $("#sheetInner").innerHTML = `
     <div class="grab"></div>
     <div class="sheet-head"><span style="width:70px"></span><h3>✨ Vorschläge${BETA()}</h3><button class="btn small primary" id="sgDone">Fertig</button></div>
     <div class="sub" style="margin-bottom:10px">${esc(SUGG.data && SUGG.data.region || "")} · recherchiert von Claude · Stand ${upd}</div>
+    ${areas.length>1 ? `<div class="chips"><button class="chip ${suggArea==="all"?"on":""}" data-sa="all">🌍 Überall</button>${areas.map(a=>`<button class="chip ${suggArea===a?"on":""}" data-sa="${esc(a)}">${a==="Alpen"?"🏔 Alpen":a==="Deutschland"?"🇩🇪 Deutschland":esc(a)}</button>`).join("")}</div>` : ""}
     ${sports.length>1 ? `<div class="chips"><button class="chip ${suggFilter==="all"?"on":""}" data-sf="all">Alle</button>${sports.map(sp=>`<button class="chip ${suggFilter===sp?"on":""}" data-sf="${sp}">${sportOf(sp).ic} ${sportOf(sp).name}</button>`).join("")}</div>` : ""}
     ${list.length ? list.map(x=>{
       const d = parse(x.date), url = safeUrl(x.url);
@@ -1097,6 +1100,7 @@ function openSuggestions(){
   all.forEach(x=>SUGG.seen.add(x.id)); SUGG.saveSets();
   const sh = $("#sheetInner");
   sh.querySelectorAll("[data-sf]").forEach(b => b.onclick = () => { suggFilter = b.dataset.sf; openSuggestions(); });
+  sh.querySelectorAll("[data-sa]").forEach(b => b.onclick = () => { suggArea = b.dataset.sa; openSuggestions(); });
   sh.querySelectorAll("[data-watch]").forEach(b => b.onclick = () => {
     const x = all.find(i=>i.id===b.dataset.watch); if(!x) return;
     STORE.save({id:newId(), title:x.title, sport: SPORTS.some(s=>s.id===x.sport)?x.sport:"sonst", date:x.date, endDate:x.endDate||"", time:"",
@@ -1117,7 +1121,8 @@ const BETA = () => IS_PREVIEW ? `<span class="pill beta">Vorabversion</span>` : 
 const SEEN_KEY = "sportticker.seenVersion";
 const CHANGELOG = [
   {v:7, date:"14.11.2026", items:[
-    "✨ Vorschläge: Claude sucht jeden Sonntag nach neuen Veranstaltungen in der Alpenregion – Rad, Gravel/Bikepacking, Laufen, Trail, Triathlon und Wandern",
+    "✨ Vorschläge: Claude sucht jeden Sonntag nach neuen Veranstaltungen in ganz Deutschland und der Alpenregion – Rad, Gravel/Bikepacking, Laufen, Trail, Triathlon und Wandern",
+    "🗺 Filter nach Region (Deutschland / Alpen) und Sportart",
     "➕ Mit einem Tipp auf „Beobachten“ landet ein Vorschlag direkt in deinen Veranstaltungen",
     "⚙️ Unter Mehr → Vorschläge kannst du sie ausblenden oder Ausgeblendete zurückholen"]},
   {v:6, date:"14.11.2026", items:[
