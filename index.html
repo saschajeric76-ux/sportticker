@@ -112,6 +112,12 @@ a.link{font-size:13px;color:var(--accent);text-decoration:none;font-weight:600;m
 .pill.new{background:var(--accent);color:#fff}
 .pill.tbc{background:var(--warn-soft);color:var(--warn)}
 .pill.beta{background:var(--watch-soft);color:var(--watch);font-size:11px;vertical-align:middle;margin-left:6px}
+.ai-box{background:var(--card);border-radius:14px;padding:12px;margin:-4px 0 14px;box-shadow:0 0 0 1px var(--line) inset}
+.ai-box .btn{text-decoration:none}
+.ai-box .step{font-size:13px;color:var(--muted);margin:8px 2px 6px}
+.ai-box textarea{width:100%;min-height:90px;border:0;border-radius:10px;padding:10px;background:var(--bg);box-shadow:0 0 0 1px var(--line) inset;font-size:14px;margin-top:6px}
+.flash{animation:flash 1.6s ease}
+@keyframes flash{0%,40%{box-shadow:0 0 0 2px var(--reg) inset;background:var(--reg-soft)}100%{}}
 .hol-banner{background:var(--hol-soft);color:var(--hol);border-radius:12px;padding:9px 12px;margin:-2px 0 10px;font-size:14px;font-weight:600}
 .legend .hl{width:10px;height:10px;border-radius:3px;background:var(--hol-soft);box-shadow:0 0 0 1px var(--hol) inset;display:inline-block}
 .day.sel{background:var(--text);color:var(--bg)}
@@ -800,6 +806,19 @@ function openEditor(ev, presetDate, keepNew){
     <label class="field"><span>Unterkunft (Name oder Adresse)</span><input id="f_stay" value="${esc(e.stay||"")}" placeholder="z. B. Hotel Alpenblick, Garmisch"></label>
     <div class="maprow" id="stayMaps">${mapButtons(e.stay)}</div>
     <label class="field"><span>Link zur Veranstalter-Website</span><input type="url" inputmode="url" autocapitalize="off" id="f_url" value="${esc(e.url)}" placeholder="https://…"></label>
+    <div class="ai-box" id="aiBox">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <button class="btn small primary" id="aiStart">🤖 Mit Claude ausfüllen</button><span class="pill beta">Beta</span>
+      </div>
+      <div class="step" id="aiHint">Link einfügen, dann tippen: Claude liest die Veranstalterseite und ergänzt Datum, Ort, Strecke, Startgeld und mehr.</div>
+      <div id="aiStep2" style="display:none">
+        <div class="step"><b>Schritt 2:</b> In Claude die Antwort (den Block mit „SPORTTICKER“) kopieren, zurückkommen und hier tippen:</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn small primary" id="aiPaste">📋 Antwort einfügen</button>
+          <button class="btn small" id="aiManual">Text selbst einfügen</button></div>
+        <div id="aiManualBox" style="display:none"><textarea id="aiText" placeholder="Antwort von Claude hier einfügen …"></textarea>
+          <div class="actions" style="margin-top:6px"><button class="btn small primary" id="aiApply">Übernehmen</button></div></div>
+      </div>
+    </div>
     <div class="two">
       <label class="field"><span>Erinnerung</span><select id="f_remind">${REMIND.map(r=>`<option value="${r.v}" ${+e.remind===r.v?"selected":""}>${r.n}</option>`).join("")}</select></label>
       <label class="field"><span>Anmeldeschluss</span><input type="date" id="f_deadline" value="${esc(e.deadline)}"></label>
@@ -841,6 +860,13 @@ function openEditor(ev, presetDate, keepNew){
   });
   $("#openPack").onclick = () => { editing = formValues(); openPack(); };
   $("#f_sport").onchange = () => { const p = packProgress({...editing, sport: $("#f_sport").value}); $("#openPack").textContent = `Packliste öffnen · ${p.c} von ${p.n} gepackt`; };
+  $("#aiStart").onclick = () => aiStart();
+  $("#aiPaste").onclick = async () => {
+    try{ const t = await navigator.clipboard.readText(); aiApply(t); }
+    catch{ $("#aiManualBox").style.display = "block"; toast("Bitte die Antwort unten einfügen."); }
+  };
+  $("#aiManual").onclick = () => { $("#aiManualBox").style.display = "block"; setTimeout(()=>$("#aiText").focus(),50); };
+  $("#aiApply").onclick = () => aiApply($("#aiText").value);
   $("#f_location").oninput = ev => $("#locMaps").innerHTML = mapButtons(ev.target.value.trim());
   $("#f_stay").oninput = ev => $("#stayMaps").innerHTML = mapButtons(ev.target.value.trim());
   renderTicketArea();
@@ -1114,12 +1140,70 @@ function openSuggestions(){
   $("#backdrop").classList.add("open"); $("#sheet").classList.add("open");
 }
 
+/* ---------- Mit Claude ausfüllen (Beta) ---------- */
+function aiPrompt(url){
+  return `Hallo Claude! Bitte öffne diese Veranstalterseite (und falls nötig die verlinkte Ausschreibung) und finde die Daten der nächsten Austragung:
+${url}
+
+Antworte bitte NUR mit diesem einen Block – gültiges JSON in einer Zeile, unbekannte Werte leer lassen und nichts erfinden. Er wird in meine App „Mein Sportticker“ eingefügt:
+SPORTTICKER {"title":"","sport":"lauf|rad|gravel|tri|schwimm|trail|wandern|sonst","date":"JJJJ-MM-TT","endDate":"JJJJ-MM-TT oder leer","time":"HH:MM oder leer","location":"Ort, Adresse","distance":"z. B. 42,2 km / 1.900 hm","fee":0,"deadline":"JJJJ-MM-TT oder leer","notes":"wichtigste Infos in 1–2 Sätzen, z. B. Verlosung, Pflichtausrüstung"}`;
+}
+function aiStart(){
+  const url = safeUrl($("#f_url").value);
+  if(!url){ toast("Bitte zuerst den Link zur Veranstalterseite einfügen."); $("#f_url").focus(); return; }
+  const prompt = aiPrompt(url);
+  try{ navigator.clipboard && navigator.clipboard.writeText(prompt).catch(()=>{}); }catch{}
+  const a = document.createElement("a");
+  a.href = "https://claude.ai/new?q=" + encodeURIComponent(prompt);
+  a.target = "_blank"; a.rel = "noopener";
+  document.body.appendChild(a); a.click(); a.remove();
+  $("#aiStep2").style.display = "block";
+  $("#aiHint").textContent = "Claude öffnet sich mit der fertigen Anfrage. Ist das Eingabefeld leer, einfach einfügen – die Anfrage ist schon kopiert.";
+}
+function aiParse(text){
+  if(!text) return null;
+  let t = String(text).replace(/[“”„]/g,'"').replace(/[‘’]/g,"'").replace(/```(json)?/g,"");
+  const i = t.indexOf("SPORTTICKER"); if(i>=0) t = t.slice(i+11);
+  const a = t.indexOf("{"), b = t.lastIndexOf("}");
+  if(a<0 || b<=a) return null;
+  try{ return JSON.parse(t.slice(a, b+1)); }catch{ return null; }
+}
+function aiApply(text){
+  const d = aiParse(text);
+  if(!d){ toast("Das sieht nicht nach der Antwort von Claude aus. Bitte den ganzen SPORTTICKER-Block kopieren."); return; }
+  const isDate = v => /^\d{4}-\d{2}-\d{2}$/.test(v||""), isTime = v => /^\d{1,2}:\d{2}$/.test(v||"");
+  let n = 0;
+  const set = (id, val, overwrite) => {
+    const el = $("#"+id); if(!el || val==null || val==="") return;
+    if(!overwrite && el.value.trim()) return;
+    el.value = val; el.classList.remove("flash"); void el.offsetWidth; el.classList.add("flash"); n++;
+  };
+  set("f_title", (d.title||"").trim());
+  if(isDate(d.date)) set("f_date", d.date, true);
+  if(isDate(d.endDate) && d.endDate > (d.date||"")) set("f_end", d.endDate, true);
+  if(isTime(d.time)) set("f_time", d.time.padStart(5,"0"), true);
+  if(d.sport && SPORTS.some(x=>x.id===d.sport) && editingNew){ set("f_sport", d.sport, true); $("#f_sport").onchange && $("#f_sport").onchange(); }
+  set("f_location", (d.location||"").trim());
+  set("f_distance", (d.distance||"").trim());
+  if(isDate(d.deadline)) set("f_deadline", d.deadline);
+  const fee = typeof d.fee === "number" ? d.fee : parseMoney(d.fee);
+  if(fee > 0) set("f_fee", String(fee).replace(".",","));
+  if(d.notes){ const nt = $("#f_notes"); if(!nt.value.includes(d.notes)){ nt.value = (nt.value ? nt.value+"\n" : "") + d.notes.trim(); nt.classList.add("flash"); n++; } }
+  $("#locMaps").innerHTML = mapButtons($("#f_location").value.trim());
+  $("#aiManualBox").style.display = "none"; $("#aiText").value = "";
+  toast(n ? `${n} Felder ergänzt – bitte kurz prüfen und sichern.` : "Nichts Neues gefunden – deine Eingaben bleiben unverändert.");
+}
+
 /* ---------- Was ist neu ---------- */
-const APP_VERSION = 7;
+const APP_VERSION = 8;
 const IS_PREVIEW = true; // Vorabversion – nach dem Testen auf false setzen
 const BETA = () => IS_PREVIEW ? `<span class="pill beta">Vorabversion</span>` : "";
 const SEEN_KEY = "sportticker.seenVersion";
 const CHANGELOG = [
+  {v:8, date:"14.11.2026", items:[
+    "🤖 Mit Claude ausfüllen (Beta): Link zur Veranstalterseite einfügen, tippen – Claude liest die Seite und ergänzt Datum, Startzeit, Ort, Strecke, Startgeld, Anmeldeschluss und Hinweise",
+    "📋 So geht’s: Claude öffnet sich mit fertiger Anfrage → Antwort kopieren → zurück in den Sportticker → „Antwort einfügen“. Ausgefüllte Felder leuchten kurz grün auf.",
+    "🧪 Die Funktion ist noch in der Testphase – über Rückmeldungen freue ich mich!"]},
   {v:7, date:"14.11.2026", items:[
     "✨ Vorschläge: Claude sucht jeden Sonntag nach neuen Veranstaltungen in ganz Deutschland und der Alpenregion – Rad, Gravel/Bikepacking, Laufen, Trail, Triathlon und Wandern",
     "🗺 Filter nach Region (Deutschland / Alpen) und Sportart",
